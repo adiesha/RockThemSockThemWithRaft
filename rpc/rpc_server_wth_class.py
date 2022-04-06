@@ -10,7 +10,9 @@ def main():
     # Define server
     server = SimpleXMLRPCServer(('localhost', 3000), logRequests=True, allow_none=True)
     # Register the functions that needs to be served
-    server.register_instance(Apple())
+    a = Apple()
+    a.b = 67
+    server.register_instance(a)
 
     try:
         print("Serving........")
@@ -26,6 +28,7 @@ def list_directory(dir):
 class Apple:
     def __init__(self):
         self.a = 6
+        self.b = 0
 
     def print(self):
         print("Apple")
@@ -40,6 +43,8 @@ class Apple:
         pickledmsg = pickle.dumps(a)
         return xmlrpc.client.Binary(pickledmsg)
 
+    def printB(self):
+        return self.b
 
 if __name__ == '__main__':
     main()

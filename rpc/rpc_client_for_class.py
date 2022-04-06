@@ -14,3 +14,4 @@ if __name__ == '__main__':
     a = pickle.loads(data)
     print(True if type(a) == Apple else False)
     print(a.a)
+    print(proxy.printB())

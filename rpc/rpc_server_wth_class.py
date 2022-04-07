@@ -43,8 +43,22 @@ class Apple:
         pickledmsg = pickle.dumps(a)
         return xmlrpc.client.Binary(pickledmsg)
 
+    def changeApple(self, apple):
+        print("Serving 42")
+        print(apple.b)
+        apple.b = "42"
+        pickledmsg = pickle.dumps(apple)
+        return xmlrpc.client.Binary(pickledmsg)
+
     def printB(self):
         return self.b
+
+    def printParameter(self, p):
+        print(p)
+        pass
+
+    def printDict(self, d):
+        print(d)
 
 if __name__ == '__main__':
     main()

@@ -38,9 +38,11 @@ class Raft:
 
     # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the appendEntries for leader
-    def appendEntries(self, id):
+    def appendEntries(self, info):
+        # First check whether this is a initial heartbeat by a leader.
+
         self.receivedHeartBeat = True
-        self.leader = id
+        self.leader = info['nodeid']
         self.state = State.FOLLOWER
         print("Appending Entries in node {0} by the leader".format(self.id))
 
@@ -168,6 +170,18 @@ class Raft:
         dict['lastlogterm'] = self.getLastTerm()
         return dict
 
+    def createApppendEntryInfo(self):
+        dict = {}
+
+        dict['leaderid'] = self.id
+        dict['term'] = self.currentTerm
+        dict['previouslogindex'] = self.getLastIndex() - 1
+        dict['previouslogterm'] = self.getLastTerm()
+        dict['values'] = None
+        dict['leadercommit'] = self.commitIndex
+
+        return dict
+
     def timeout(self):
         while True:
             randomTimeout = random.randint(2, 5)
@@ -193,7 +207,7 @@ class Raft:
                                 sleep(electionTimeout)
                                 print("Election timeout occurred. Restarting the election Node {0}".format(self.id))
                             elif self.state == State.FOLLOWER:
-                                print("Looks like we found a leader for the term, leader is {1}")
+                                print("Looks like we found a leader for the term, leader is {0}".format(self.votedFor))
             elif self.state == State.LEADER:
                 # send heartbeats
                 for k, v in self.map.items():

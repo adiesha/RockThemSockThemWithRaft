@@ -24,6 +24,7 @@ if __name__ == '__main__':
     print(a.a)
     print(proxy.printB())
     print(proxy.printParameter(2))
+    print(proxy.multipleReturnVsalues())
     try:
         print(proxy.printDict({"a": 12, "b": 45, 3: "12"}))
     except TypeError:

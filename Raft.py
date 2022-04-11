@@ -1,4 +1,7 @@
+import random
+import threading
 from enum import Enum
+from time import sleep
 
 
 class Raft:
@@ -12,6 +15,7 @@ class Raft:
         self.noOfNodes = None
 
         self.state = State.FOLLOWER
+        self.leader = None
 
         # volatile states
         self.commitIndex = 0
@@ -34,7 +38,10 @@ class Raft:
 
     # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the appendEntries for leader
-    def appendEntries(self, message):
+    def appendEntries(self, id):
+        self.receivedHeartBeat = True
+        self.leader = id
+        self.state = State.FOLLOWER
         print("Appending Entries in node {0} by the leader".format(self.id))
 
     # Request RPC is the method that is invoked by a candidate to request the vote
@@ -102,9 +109,40 @@ class Raft:
         pass
 
     def _invokeRequestVoteRPV(self):
+        print("Invoking Election by Node {0}".format(self.id))
         # vote for itself
         # loop the nodes and call the RequestVoteRPC
-        pass
+        vote = Vote()
+
+        self.state = State.CANDIDATE
+        self.currentTerm = self.currentTerm + 1
+        self.votedFor = self.id
+        vote.addVote()
+        inf = self.createInfo()
+
+        for k, v in self.map.items():
+            if k != self.id:
+                # result = self.createDaemon(v.requestVote, inf)
+                self.requestVoteFromNode(v, inf, vote)
+
+        if vote.getVotes() >= self.getSimpleMajority():
+            print("Found the majority. Making node {0} the leader".format(self.id))
+            self.state = State.LEADER
+            # send a heartbeat
+            return True
+        else:
+            return False
+
+    def createDaemon(self, func, inf):
+        thread = threading.Thread(target=func, args=(inf,))
+        thread.daemon = True
+        thread.start()
+        return thread
+
+    def requestVoteFromNode(self, proxy, inf, vote):
+        result = proxy.requestVote(inf)
+        if result:
+            vote.addVote()
 
     def getSimpleMajority(self):
         if self.noOfNodes % 2 == 0:
@@ -130,6 +168,48 @@ class Raft:
         dict['lastlogterm'] = self.getLastTerm()
         return dict
 
+    def timeout(self):
+        while True:
+            randomTimeout = random.randint(2, 5)
+            if self.state == State.FOLLOWER:
+                print("Chosen timeout for node {0} is {1}".format(self.id, randomTimeout))
+                sleep(randomTimeout)
+                if self.receivedHeartBeat:
+                    self.receivedHeartBeat = False
+                    print("Timeout occurred but Heartbeat was received earlier. Picking a new timeout")
+                    continue
+                    # pick a new timeout
+                else:
+                    while True:
+                        electionTimeout = random.randint(2, 5)
+                        # we can send the timeout period to following method as well
+                        # Not sure what is the best solution yet
+                        result = self._invokeRequestVoteRPV()
+                        if result:
+                            print("Leader Elected: Node {0}".format(self.id))
+                            break
+                        else:
+                            if self.state == State.CANDIDATE:
+                                sleep(electionTimeout)
+                                print("Election timeout occurred. Restarting the election Node {0}".format(self.id))
+                            elif self.state == State.FOLLOWER:
+                                print("Looks like we found a leader for the term, leader is {1}")
+            elif self.state == State.LEADER:
+                # send heartbeats
+                for k, v in self.map.items():
+                    if k != self.id:
+                        v.appendEntries(self.id)
+
+                sleep(randomTimeout)
+                print("Sending Heartbeats")
+                pass
+
+    def createTimeoutThread(self):
+        thread = threading.Thread(target=self.timeout)
+        thread.daemon = True
+        thread.start()
+        return thread
+
 
 class State(Enum):
     FOLLOWER = 1
@@ -143,3 +223,17 @@ class Entry:
         self.id = id
         self.term = term
         self.iscommitted = False
+
+
+class Vote:
+    def __init__(self):
+        self.votes = 0
+        self.mutex = threading.Lock()
+
+    def getVotes(self):
+        return self.votes
+
+    def addVote(self):
+        self.mutex.acquire()
+        self.votes = self.votes + 1
+        self.mutex.release()

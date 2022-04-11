@@ -60,5 +60,8 @@ class Apple:
     def printDict(self, d):
         print(d)
 
+    def printThread(self):
+        print('Threading')
+
 if __name__ == '__main__':
     main()

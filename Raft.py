@@ -39,7 +39,7 @@ class Raft:
 
     # Request RPC is the method that is invoked by a candidate to request the vote
     def requestVote(self, info):
-        # info is a dict: nodeid, term, lastindexofthelog
+        # info is a dict: nodeid, term, lastindexofthelog lastlogterm
         candidateid = info['nodeid']
         term = info['term']
         candidateslastindexofthelog = info['lastindexofthelog']
@@ -47,19 +47,63 @@ class Raft:
 
         if term < self.currentTerm:
             return False
-        else:
+        else:  # term >= self.currentTerm
             # Need to implement this
-            return True
-
+            if self.votedFor is None:
+                # Compare the term of the last entry against candidates last term
+                # if they are the same then compare the last log index
+                if candidateslastlogterm < self.getLastTerm():
+                    print("Candidates last term is smaller than the current term of the node {0}".format(self.id))
+                    return False
+                else:
+                    # candidates term is greater than or equal to nodes term, now we have to look at the last index
+                    if candidateslastlogterm == self.getLastTerm():
+                        # check the last index of the log
+                        if candidateslastindexofthelog < self.getLastIndex():
+                            print(
+                                "Candidates term and current term is equal but last index of the node {0} is greater than the candidates last index".format(
+                                    self.id
+                                ))
+                            return False
+                        else:
+                            self.votedFor = candidateid
+                            return True
+                    else:
+                        self.votedFor = candidateid
+                        return True
+                pass
+            else:  # Already voted for someone
+                return False
 
     # invoking appendEntries of other nodes
     # This method should not be exposed to invoke
     def _invokeAppendEntries(self):
+        # check whether you are the leader
+        if self.state != State.LEADER:
+            print("Node {0} is not the leader cannot add entries".format(self.id))
+            return
+
+        # add the entry to the log
+        entry = Entry(len(self.log), self.currentTerm)
+        self.log.append(entry)
+        entry.id = len(self.log) - 1
+
+        info = self.createInfo()
+        info['value'] = entry
+
+        # Node is the leader
+        for k, v, in self.map.items():
+            v.appendEntries(info)
         pass
 
     # This method should invoke heartbeat function of other nodes
     # This method should not be exposed to invoke
     def _invokeHeartBeat(self):
+        pass
+
+    def _invokeRequestVoteRPV(self):
+        # vote for itself
+        # loop the nodes and call the RequestVoteRPC
         pass
 
     def getSimpleMajority(self):
@@ -68,8 +112,34 @@ class Raft:
         else:
             return int(self.noOfNodes / 2) + 1
 
+    def getLastTerm(self):
+        if self.log is None:
+            return 0
+        else:
+            return self.log[-1].term
+
+    def getLastIndex(self):
+        return 0 if self.log is None else len(self.log) - 1
+
+    def createInfo(self):
+        dict = {}
+
+        dict['nodeid'] = self.id
+        dict['term'] = self.currentTerm
+        dict['lastindexofthelog'] = self.getLastIndex()
+        dict['lastlogterm'] = self.getLastTerm()
+        return dict
+
 
 class State(Enum):
     FOLLOWER = 1
     CANDIDATE = 2
     LEADER = 3
+
+
+class Entry:
+    def __init__(self, id, term):
+        self.value = None
+        self.id = id
+        self.term = term
+        self.iscommitted = False

@@ -3,6 +3,8 @@ import threading
 from enum import Enum
 from time import sleep
 
+import numpy as np
+
 
 class Raft:
     def __init__(self, id):
@@ -40,11 +42,34 @@ class Raft:
     # This is not the procedure call that does the appendEntries for leader
     def appendEntries(self, info):
         # First check whether this is a initial heartbeat by a leader.
+        check = self.checkwhetheritsaheratbeat(info)
+        if check is not None:
+            return check
+        else:
+            if info['term'] < self.currentTerm:
+                return False
+            prevLogIndex = info['previouslogindex']
+            prevLogTerm = info['previouslogterm']
 
-        self.receivedHeartBeat = True
-        self.leader = info['nodeid']
-        self.state = State.FOLLOWER
+            if self.log[prevLogIndex].term != prevLogTerm:
+                return False
+
+            # received actual appendEntry do the logic
+            pass
         print("Appending Entries in node {0} by the leader".format(self.id))
+
+    def checkwhetheritsaheratbeat(self, info):
+        if info['values'] is None:
+            if info['term'] < self.currentTerm:
+                return False
+            else:
+                print("Heartbeat received")
+                self.leader = info['leaderid']
+                self.state = State.FOLLOWER
+                self.receivedHeartBeat = True
+                return True
+        else:
+            return None
 
     # Request RPC is the method that is invoked by a candidate to request the vote
     def requestVote(self, info):
@@ -97,7 +122,7 @@ class Raft:
         self.log.append(entry)
         entry.id = len(self.log) - 1
 
-        info = self.createInfo()
+        info = self.createApppendEntryInfo()
         info['value'] = entry
 
         # Node is the leader
@@ -130,10 +155,19 @@ class Raft:
         if vote.getVotes() >= self.getSimpleMajority():
             print("Found the majority. Making node {0} the leader".format(self.id))
             self.state = State.LEADER
+            self.intializevolatileStateOfTheLeader()
             # send a heartbeat
             return True
         else:
             return False
+
+    def intializevolatileStateOfTheLeader(self):
+        if self.log is None:
+            self.nextIndex = np.zeros(self.noOfNodes, dtype=np.int32)
+            self.matchIndex = np.zeros(self.noOfNodes, dtype=np.int32)
+        else:
+            lastIndex = self.getLastIndex()
+            self.nextIndex = np.zeros(lastIndex + 1, dtype=np.int32)
 
     def createDaemon(self, func, inf):
         thread = threading.Thread(target=func, args=(inf,))
@@ -209,10 +243,13 @@ class Raft:
                             elif self.state == State.FOLLOWER:
                                 print("Looks like we found a leader for the term, leader is {0}".format(self.votedFor))
             elif self.state == State.LEADER:
+                randomTimeout = random.randint(1, 2)
                 # send heartbeats
+                info = self.createApppendEntryInfo()
+                info['value'] = None
                 for k, v in self.map.items():
                     if k != self.id:
-                        v.appendEntries(self.id)
+                        v.appendEntries(info)
 
                 sleep(randomTimeout)
                 print("Sending Heartbeats")

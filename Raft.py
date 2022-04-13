@@ -6,6 +6,9 @@ from time import sleep
 import numpy as np
 
 
+# ToDO: Mutex, commiting, threading, rpc threading, exceptions handling, basic input/output
+#  adding function for clients (who is the leader?, persistent storage and restart, getting gamestate)
+
 class Raft:
     def __init__(self, id):
         # these attributes should be persistent
@@ -32,7 +35,8 @@ class Raft:
         # if not set this to false and choose another timeout and check after that time
         self.receivedHeartBeat = False
 
-        self.mutex = threading.Lock()
+        self.mutexForAppendEntry = threading.Lock()
+        self.mutexForHB = threading.Lock()
 
     # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the heartbeat for leader
@@ -43,12 +47,18 @@ class Raft:
     # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the appendEntries for leader
     def appendEntries(self, info):
+        self.mutexForAppendEntry.acquire()
+        print("Aquiring mutex for appendEntry in node {0}".format(self.id))
         # First check whether this is a initial heartbeat by a leader.
         check = self.checkwhetheritsaheratbeat(info)
         if check is not None:
+            self.mutexForAppendEntry.release()
+            print("Mutex for appendEntry is released in node {0}".format(self.id))
             return check, self.currentTerm
         else:
             if info['term'] < self.currentTerm:
+                self.mutexForAppendEntry.release()
+                print("Mutex for appendEntry is released in node {0}".format(self.id))
                 return False, self.currentTerm
             prevLogIndex = info['previouslogindex']
             prevLogTerm = info['previouslogterm']
@@ -58,6 +68,8 @@ class Raft:
             else:
                 print("prev:" + str(prevLogIndex))
                 if self.log[prevLogIndex].term != prevLogTerm:
+                    self.mutexForAppendEntry.release()
+                    print("Mutex for appendEntry is released in node {0}".format(self.id))
                     return False, self.currentTerm
 
             # received actual appendEntry do the logic
@@ -73,6 +85,8 @@ class Raft:
                                                                                                              len(self.log)))
                 else:
                     self.log.append(e)
+        self.mutexForAppendEntry.release()
+        print("Mutex for appendEntry is released in node {0}".format(self.id))
         return True, self.currentTerm
 
     def checkwhetheritsaheratbeat(self, info):
@@ -90,7 +104,9 @@ class Raft:
                 print("Heartbeat received by node {0} from the leader {1}".format(self.id, info['leaderid']))
                 self.leader = info['leaderid']
                 self.state = State.FOLLOWER
+                self.mutexForHB.acquire()
                 self.receivedHeartBeat = True
+                self.mutexForHB.release()
                 print("Node {0} 's current Term is before update is {1} state {2}".format(self.id, self.currentTerm,
                                                                                           self.state))
                 self.currentTerm = info['term']
@@ -104,6 +120,8 @@ class Raft:
 
     # Request RPC is the method that is invoked by a candidate to request the vote
     def requestVote(self, info):
+        self.mutexForAppendEntry.acquire()
+        print('Acquiring mutex for request vote in node {0}'.format(self.id))
         # info is a dict: nodeid, term, lastindexofthelog lastlogterm
         candidateid = info['nodeid']
         term = info['term']
@@ -111,6 +129,8 @@ class Raft:
         candidateslastlogterm = info['lastlogterm']
 
         if term < self.currentTerm:
+            self.mutexForAppendEntry.release()
+            print('Releasing mutex for request vote in node {0}'.format(self.id))
             return False
         else:  # term >= self.currentTerm
             # Need to implement this
@@ -119,6 +139,8 @@ class Raft:
                 # if they are the same then compare the last log index
                 if candidateslastlogterm < self.getLastTerm():
                     print("Candidates last term is smaller than the current term of the node {0}".format(self.id))
+                    self.mutexForAppendEntry.release()
+                    print('Releasing mutex for request vote in node {0}'.format(self.id))
                     return False
                 else:
                     # candidates term is greater than or equal to nodes term, now we have to look at the last index
@@ -129,15 +151,22 @@ class Raft:
                                 "Candidates term and current term is equal but last index of the node {0} is greater than the candidates last index".format(
                                     self.id
                                 ))
+                            self.mutexForAppendEntry.release()
+                            print('Releasing mutex for request vote in node {0}'.format(self.id))
                             return False
                         else:
                             self.votedFor = candidateid
+                            self.mutexForAppendEntry.release()
+                            print('Releasing mutex for request vote in node {0}'.format(self.id))
                             return True
                     else:
                         self.votedFor = candidateid
+                        self.mutexForAppendEntry.release()
+                        print('Releasing mutex for request vote in node {0}'.format(self.id))
                         return True
-                pass
             else:  # Already voted for someone
+                self.mutexForAppendEntry.release()
+                print('Releasing mutex for request vote in node {0}'.format(self.id))
                 return False
 
     # invoking appendEntries of other nodes
@@ -259,14 +288,20 @@ class Raft:
             if self.state == State.FOLLOWER:
                 print("Chosen timeout for node {0} is {1}".format(self.id, randomTimeout))
                 sleep(randomTimeout)
+                print("Acquiring HB mutex")
+                self.mutexForHB.acquire()
                 if self.receivedHeartBeat:
                     self.receivedHeartBeat = False
                     print(
                         "Timeout occurred but Heartbeat was received by the node {0} earlier. Picking a new timeout".format(
                             self.id))
+                    self.mutexForHB.release()
+                    print("Releasing HB mutex")
                     continue
                     # pick a new timeout
                 else:
+                    self.mutexForHB.release()
+                    print("Releasing HB mutex")
                     while True:
                         electionTimeout = random.randint(2, 5)
                         # we can send the timeout period to following method as well
@@ -293,7 +328,6 @@ class Raft:
 
                 sleep(randomTimeout)
                 print("Sending Heartbeats")
-                pass
 
     def createTimeoutThread(self):
         thread = threading.Thread(target=self.timeout)

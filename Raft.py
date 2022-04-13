@@ -56,6 +56,7 @@ class Raft:
             if prevLogIndex == -1:
                 pass
             else:
+                print("prev:" + str(prevLogIndex))
                 if self.log[prevLogIndex].term != prevLogTerm:
                     return False, self.currentTerm
 
@@ -75,17 +76,30 @@ class Raft:
         return True, self.currentTerm
 
     def checkwhetheritsaheratbeat(self, info):
-        if info['values'] is None:
+        print(
+            "Checking whether appendEntry is a Heartbeat from {0} to node {1} leader Term {2}".format(info['leaderid'],
+                                                                                                      self.id,
+                                                                                                      info['term']))
+        print(info['values'])
+        if len(info['values']) == 0:
             if info['term'] < self.currentTerm:
+                print("Term from the heartbeat is lower: HB Term {0} current term {1}".format(info['term'],
+                                                                                              self.currentTerm))
                 return False
             else:
                 print("Heartbeat received by node {0} from the leader {1}".format(self.id, info['leaderid']))
                 self.leader = info['leaderid']
                 self.state = State.FOLLOWER
                 self.receivedHeartBeat = True
+                print("Node {0} 's current Term is before update is {1} state {2}".format(self.id, self.currentTerm,
+                                                                                          self.state))
                 self.currentTerm = info['term']
+                print("Node {0} 's current Term is updated to {1} state {2}".format(self.id, self.currentTerm,
+                                                                                    self.state))
                 return True
         else:
+            print("AppendEntry from {0} to node {1} leader's Term {2} is not a HB".format(info['leaderid'], self.id,
+                                                                                          info['term']))
             return None
 
     # Request RPC is the method that is invoked by a candidate to request the vote
@@ -232,7 +246,7 @@ class Raft:
 
         dict['leaderid'] = self.id
         dict['term'] = self.currentTerm
-        dict['previouslogindex'] = self.getLastIndex() - 1
+        dict['previouslogindex'] = -1 if self.getLastIndex() == -1 else self.getLastIndex() - 1
         dict['previouslogterm'] = self.getLastTerm()
         dict['values'] = None
         dict['leadercommit'] = self.commitIndex
@@ -311,17 +325,26 @@ class Raft:
             if self.nextIndex[k - 1] > self.getLastIndex() and not hb:
                 print("Node {0} is up to date".format(k))
                 return True
-            values.append(self.log[self.nextIndex[k - 1]])
+            hb = False  # HB flag is set to false because we do not need to loop this indefinitely
+            if not self.log:
+                print("Log is empty, Therefore values would be empty as well. This would be a heartbeat")
+            else:
+                print("Length " + str(len(self.log)) + " k: " + str(k) + " nextIndex " + str(
+                    len(self.nextIndex)) + " nextIndexValue: " + str(self.nextIndex[k - 1]))
+                if not self.nextIndex[k - 1] > self.getLastIndex():  # need to do this check again for HB without
+                    # entries
+                    values.append(self.log[self.nextIndex[k - 1]])
             info['values'] = values
             if self.state is State.LEADER:
                 result, term = v.appendEntries(info)
                 print("RESULT: {0} Term {1}".format(result, term))
                 if result:
                     # update the nextIndex and matchindex
-                    id = values[-1].id
-                    if self.matchIndex[k - 1] <= id:
-                        self.matchIndex[k - 1] = id
-                    self.nextIndex[k - 1] = id + 1
+                    if values:
+                        id = values[-1].id
+                        if self.matchIndex[k - 1] <= id:
+                            self.matchIndex[k - 1] = id
+                        self.nextIndex[k - 1] = id + 1
                     continue
                     # return True
                 else:

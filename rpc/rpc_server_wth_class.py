@@ -64,7 +64,7 @@ class Apple:
         print('Threading')
 
     def multipleReturnVsalues(self):
-        return 2, 3
+        return 2, False
 
 
 if __name__ == '__main__':

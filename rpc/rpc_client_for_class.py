@@ -4,7 +4,7 @@ from time import sleep
 from xmlrpc.client import ServerProxy
 from rpc_server_wth_class import Apple  # do not optimize the imoprts otherwise you would remove this
 
-proxy = ServerProxy('http://localhost:3000')
+proxy = ServerProxy('http://localhost:3000', allow_none=True)
 
 
 def ThreadFunc(proxy, name):
@@ -40,3 +40,4 @@ if __name__ == '__main__':
     # As long as keys are strings, you can send stuff using rpc, if you want to send
     # an object convert it to byte array and send it as a value
     # print(proxy.printDict({"a": 12, "b": 45, "c": pickle.dumps(Apple())}))
+    print(proxy.printDict({"a": 12, "b": 45, "c": None}))

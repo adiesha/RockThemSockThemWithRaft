@@ -508,6 +508,7 @@ class Raft:
                 # print("Not the leader to find the commit index")
                 pass
 
+             
     def callAppendEntryForaSingleNode(self, k, v, hb=False):
         # this method should spawn a thread
         while True:
@@ -744,14 +745,15 @@ class Raft:
             resp = input("Choice: ").lower().split()
             if not resp:
                 continue
-            elif resp[0] == 'r':
-                self._diagnostics()
             elif resp[0] == 'd':
+                self._diagnostics()
+            elif resp[0] == 'q':
                 self.map[1].printTest()
-            elif resp[0] == 'p':
+            elif resp[0] == 'r':
                 self.printLog()
             elif resp[0] == 'a':
-                self.addRequest(None)
+                x = input("What do you want to add?")
+                self.addRequest(x)
             elif resp[0] == 'e':
                 exit(0)
 

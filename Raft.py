@@ -364,6 +364,9 @@ class Raft:
         except CannotSendRequest:
             print("Cannot send the message to node {0} from the node {1}".format(k, self.id))
             result = False
+        except ConnectionResetError:
+            print("Connection was reset in Node {0} while invoking the voteRPC by node {1}".format(k, self.id))
+            result = False
         if result:
             vote.addVote()
         print("Election Result: Candidate {0} requestedNde {1} result: {2} term: {3}".format(self.id, k, result,
@@ -552,6 +555,7 @@ class Raft:
             for k, v in self.map.items():
                 if k != self.id:
                     self.callAppendEntryForaSingleNode(k, v)
+            return True
 
         else:
             print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
@@ -625,6 +629,9 @@ class Raft:
         except CannotSendRequest:
             print("Node {0} cannot send request".format(k))
             logging.error("Node {0} cannot send request".format(k))
+            return False
+        except ConnectionResetError:
+            print("Connection was reset in Node {0} while invoking the AppendEntries by node {1}".format(k, self.id))
             return False
 
     def printLog(self):
@@ -833,7 +840,10 @@ class Raft:
     def updateCommittedEntries(self):
         temp = self.commitIndex
         for i in range(temp + 1):
-            self.log[i].iscommitted = True
+            if i > len(self.log) - 1:
+                print("Entry is not available for commit".format(i))
+            else:
+                self.log[i].iscommitted = True
 
     def getLeaderInfo(self):
         # returns leader's id or None if there is no leader at the moment

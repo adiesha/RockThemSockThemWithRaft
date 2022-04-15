@@ -473,6 +473,7 @@ class Raft:
         while True:
             if self.state == State.LEADER:
                 print("Current Commit Index {0}".format(self.commitIndex))
+                print("Current State Index {0}".format(self.stateIndex))
                 logging.debug("Current Commit Index {0}".format(self.commitIndex))
                 # temp = self.commitIndex + 1
                 count = 0
@@ -802,12 +803,11 @@ class Raft:
                     if k != self.id and k < 100:
                         self.callAppendEntryForaSingleNode(k, v)
 
-                if input == "1":
-                    self.redID = id
-                else:
-                    self.blueID = id
+                # if input == "1":
+                #     self.redID = id
+                # else:
+                #     self.blueID = id
 
-                self.stateIndex +=1
                 return 1
             else:
                 return 2
@@ -818,44 +818,6 @@ class Raft:
 
     def playerMove(self, id, input):
         if self.state is State.LEADER:
-            if id == self.blueID:
-                opp = self.redState
-            else:
-                opp = self.blueState
-            if input == "q":
-                if id == self.blueID:
-                    self.blueState = None
-                else:
-                    self.redState = None
-                if opp == "a":
-                    return 1
-                else:
-                    if random.random() < 0.10:
-                        return 2
-                    else:
-                        return 3
-            elif input == "w":
-                if id == self.blueID:
-                    self.blueState = None
-                else:
-                    self.redState = None
-                if opp == "s":
-                    return 1
-                else:
-                    if random.random() < 0.10:
-                        return 2
-                    else:
-                        return 3
-            elif input == "a":
-                if id == self.blueID:
-                    self.blueState = "a"
-                else:
-                    self.redState = "a"
-            elif input == "s":
-                if id == self.blueID:
-                    self.blueState = "s"
-                else:
-                    self.redState = "s"
 
             entry = Entry(0, self.currentTerm)             
             self.log.append(entry)
@@ -868,8 +830,28 @@ class Raft:
             for k, v in self.map.items():
                 if k != self.id and k < 100:
                     self.callAppendEntryForaSingleNode(k, v)
-            
-            self.stateIndex +=1
+                    
+            if id == self.blueID:
+                opp = self.redState
+            else:
+                opp = self.blueState
+            if input == "q":
+                if opp == "a":
+                    return 1
+                else:
+                    if random.random() < 0.10:
+                        return 2
+                    else:
+                        return 3
+            elif input == "w":
+                if opp == "s":
+                    return 1
+                else:
+                    if random.random() < 0.10:
+                        return 2
+                    else:
+                        return 3
+
         else:
             print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
             logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
@@ -890,26 +872,28 @@ class Raft:
         while True:
             if self.stateIndex < self.commitIndex+1:
                 for e in range(self.stateIndex, self.commitIndex+1):
+                    print(self.log[e])
                     if self.log[e].move == "c":
                         if self.log[e].choice == "1":
                             self.redID = self.log[e].player
                         elif self.log[e].choice == "2":
                             self.blueID = self.log[e].player
                     elif self.log[e].move == "q" or self.log[e].move == "w":
-                        if self.log[e].player == self.redID:
+                        if self.redID == self.log[e].player:
                             self.redState = None
                         else:
                             self.blueState = None
                     elif self.log[e].move == "a":
-                        if self.log[e].player == self.redID:
+                        if  self.redID == self.log[e].player:
                             self.redState = "a"
                         else:
                             self.blueState = "a"
                     elif self.log[e].move == "s":
-                        if self.log[e].player == self.redID:
+                        if self.redID == self.log[e].player:
                             self.redState = "s"
                         else:
                             self.blueState = "s"
+                    self.stateIndex+=1
 
 class State(Enum):
     FOLLOWER = 1

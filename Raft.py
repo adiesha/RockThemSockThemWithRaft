@@ -53,9 +53,7 @@ class Raft:
         self.SERVER_PORT = 65431
         self.mapofNodes = None
 
-        # players
-        self.blue = None
-        self.red = None
+        self.players = {}
 
     # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the heartbeat for leader
@@ -778,34 +776,18 @@ class Raft:
             return self.id
 
 
-    def addRequest(self, input):
-        if self.state is State.LEADER:
-            # add the entry to the log
-            entry = Entry(0, self.currentTerm)  # id is not the correct one so we update it in the next two lines
-            self.log.append(entry)
-            entry.id = len(self.log) - 1
-            print("Entry ID: {0}".format(entry.id))
-            logging.debug("Entry ID: {0}".format(entry.id))
-
-            for k, v in self.map.items():
-                if k != self.id and k < 100:
-                    self.callAppendEntryForaSingleNode(k, v)
-
-        else:
-            print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
-            logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
-            return False
-
     def setPlayer(self, id, input):
         if self.state is State.LEADER:
             flag = True
             for e in self.log:
-                if e.player == input:
+                if e.choice == input:
                     flag = False
             if flag:
-                entry = Entry(0, self.currentTerm)  
-                self.log.append(entry)
-                entry.player = input
+                entry = Entry(0, self.currentTerm)            
+                self.log.append(entry)                 
+                entry.player = id
+                entry.choice = input
+                entry.move = "c"
                 entry.id = len(self.log) - 1
                 print("Entry ID: {0}".format(entry.id))
                 logging.debug("Entry ID: {0}".format(entry.id))
@@ -815,20 +797,71 @@ class Raft:
                         self.callAppendEntryForaSingleNode(k, v)
 
                 if input == 1:
-                    self.red = id
+                    pl = Player("red")
+                    self.players[id] = pl
                 else:
-                    self.blue = id
-                return True
+                    p2 = Player("blue")
+                    self.players[id] = p2
+                return 1
             else:
-                return False
+                return 2
         else:
             print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
             logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
-            return False
+            return 3
 
     def playerMove(self, id, input):
         if self.state is State.LEADER:
-            pass
+            if input == "q":
+                for k, v in self.players.items():
+                    if k != id:
+                        print(str(v.state))
+                        if v.state == "a":
+                            return 1
+                        else:
+                            if random.random() < 0.10:
+                                return 2
+                            else:
+                                return 3
+                    else:
+                        v.state == None
+            elif input == "w":
+                for k, v in self.players.items():
+                    if k != id:
+                        if v.state == "s":
+                            return 1
+                        else:
+                            if random.random() < 0.10:
+                                return 2
+                            else:
+                                return 3
+                    else:
+                        v.state == None
+            elif input == "a":
+                for k, v in self.players.items():
+                    print(v)
+                    print("K : "+str(k) + " ID : "+str(id))
+                    if k == id:
+                       self.players[id].state == "a"
+                       print (v)
+            elif input == "s":
+                for k, v in self.players.items():
+                    if k == id:
+                        self.players[id].state == "s"
+                        print (v)
+
+            entry = Entry(0, self.currentTerm)             
+            self.log.append(entry)
+            entry.player = id
+            entry.move = input
+            entry.id = len(self.log) - 1 
+            print("Entry ID: {0}".format(entry.id))
+            logging.debug("Entry ID: {0}".format(entry.id))
+
+            for k, v in self.map.items():
+                if k != self.id and k < 100:
+                    self.callAppendEntryForaSingleNode(k, v)
+
         else:
             print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
             logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
@@ -843,15 +876,15 @@ class State(Enum):
 
 class Entry:
     def __init__(self, id, term):
-        self.value = None
-        self.player = None
-        self.move = None
         self.id = id
         self.term = term
+        self.player = None
+        self.choice = None
+        self.move = None
         self.iscommitted = False
 
     def __str__(self):
-        return "id:{0} term:{1} val:{2} isCommitted: {3}\t".format(self.id, self.term, self.value, self.iscommitted)
+        return "Entry id:{0} term:{1} Player:{2} Choice:{3} Move:{4} isCommitted: {5}\t".format(self.id, self.term, self.player, self.choice, self.move, self.iscommitted)
 
 
 class Vote:
@@ -866,6 +899,14 @@ class Vote:
         self.mutex.acquire()
         self.votes = self.votes + 1
         self.mutex.release()
+
+class Player:
+    def __init__(self, colour):
+        self.colour = colour
+        self.state = None
+
+    def __str__(self):
+        return "colour:{0} state:{1}\t".format(self.colour, self.state)
 
 
 if __name__ == "__main__":

@@ -133,6 +133,14 @@ class RockEm:
         jr = json.loads(input)
         return jr
 
+    def getLeader(self):
+        while (self.leader_id == None):
+            for k, v, in self.map.items():
+                if k < 100:
+                    self.leader_id = v.getLeaderInfo()
+        print("Leader ID is: "+str(self.leader_id))
+
+
     def choosePlayer(self):
         while True:
             print("Enter your choice:")
@@ -140,10 +148,14 @@ class RockEm:
             print("Blue Bomber [2]")
             resp = input("Choice: ")
             ans = self.map[self.leader_id].setPlayer(self.id, resp)
-            if ans:
+            if ans == 1:
+                print("Player chosen")
                 break
-            else:
+            elif ans == 2:
                 print("Player already taken, please choose another player")
+            else:
+                print("Getting correct leader")
+                self.getLeader()
 
     def menu(self):
         while True:
@@ -152,13 +164,16 @@ class RockEm:
             print("punch_with_right [W]")
             print("block_with_left [A]")
             print("block_with_right [S]")
-            resp = input("Choice: ")
+            resp = input("Choice: ").lower()
             ans = self.map[self.leader_id].playerMove(self.id, resp)
-            if ans:
-                break
-            else:
-                print("Player already taken, please choose another player")
-
+            if ans == 1:
+                print("Punch blocked!")
+            elif ans == 2:
+                print("Hit landed! You win!")
+                exit(0)
+            elif ans == 3:
+                print("Punch Dodged!")
+            
 
     def main(self):
         print('Number of arguments:', len(sys.argv), 'arguments.')
@@ -185,12 +200,7 @@ class RockEm:
             print(self.mapofNodes)
             print("Creating the proxy Map")
             self.createProxyMap()
-            for k, v, in self.map.items():
-                if k < 100:
-                    self.leader_id = v.getLeaderInfo()
-                if (self.leader_id != None):
-                    break
-            print("Leader ID is: "+str(self.leader_id))
+            self.getLeader()
             self.choosePlayer()
             self.menu()
 

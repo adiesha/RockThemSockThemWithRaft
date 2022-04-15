@@ -3,10 +3,10 @@ import logging
 import os
 import pickle
 import random
+import socket
 import sys
 import threading
 from enum import Enum
-import socket
 from time import sleep
 from xmlrpc.client import ServerProxy
 from xmlrpc.server import SimpleXMLRPCServer
@@ -80,6 +80,8 @@ class Raft:
                 return False, self.currentTerm
             prevLogIndex = info['previouslogindex']
             prevLogTerm = info['previouslogterm']
+            leadercommitIndex = info['leadercommit']
+            print("leaddercommmit {0}".format(leadercommitIndex))
 
             if prevLogIndex == -1:
                 pass
@@ -111,6 +113,8 @@ class Raft:
                     #                                                                                          len(self.log)))
                 else:
                     self.log.append(e)
+                    self.commitIndex = leadercommitIndex
+                    self.updateCommittedEntries()
         self.mutexForAppendEntry.release()
         # print("Mutex for appendEntry is released in node {0}".format(self.id))
         logging.debug("Mutex for appendEntry is released in node {0}".format(self.id))
@@ -155,6 +159,8 @@ class Raft:
                     "Node {0} 's current Term is before update is {1} state {2}".format(self.id, self.currentTerm,
                                                                                         self.state))
                 self.currentTerm = info['term']
+                self.commitIndex = info['leadercommit']
+                self.updateCommittedEntries()
                 print("Node {0} 's current Term is updated to {1} state {2}".format(self.id, self.currentTerm,
                                                                                     self.state))
                 return True
@@ -380,7 +386,7 @@ class Raft:
 
     def timeout(self):
         while True:
-            randomTimeout = random.randint(12, 20)
+            randomTimeout = random.randint(4, 8)
             if self.state == State.FOLLOWER:
                 print("Chosen timeout for node {0} is {1}".format(self.id, randomTimeout))
                 logging.debug("Chosen timeout for node {0} is {1}".format(self.id, randomTimeout))
@@ -430,7 +436,7 @@ class Raft:
                                 logging.debug(
                                     "Looks like we found a leader for the term, leader is {0}".format(self.votedFor))
             elif self.state == State.LEADER:
-                randomTimeout = random.randint(10, 12)
+                randomTimeout = random.randint(3, 4)
                 # send heartbeats
                 # self.updatecommitIndex()
                 info = self.createApppendEntryInfo()
@@ -455,28 +461,45 @@ class Raft:
         return thread
 
     def updatecommitIndex(self):
-        if self.state == State.LEADER:
-            print("Current Commit Index {0}".format(self.commitIndex))
-            logging.debug("Current Commit Index {0}".format(self.commitIndex))
-            temp = self.commitIndex + 1
-            count = 0
-            if 0 <= temp < len(self.log):
-                count = count + 1
+        temp = self.commitIndex + 1
+        while True:
+            if self.state == State.LEADER:
+                print("Current Commit Index {0}".format(self.commitIndex))
+                logging.debug("Current Commit Index {0}".format(self.commitIndex))
+                # temp = self.commitIndex + 1
+                count = 0
+                if 0 <= temp < len(self.log):
+                    count = count + 1
+                else:
+                    print("Next index does not exist in the log next index {0}".format(temp))
+                    logging.debug("Next index does not exist in the log next index {0}".format(temp))
+                    sleep(3)
+                    continue
+                for i in range(self.noOfNodes):
+                    if i != self.id:
+                        if temp <= self.matchIndex[i - 1]:
+                            count = count + 1
+                if count >= self.getSimpleMajority():
+                    if self.log[temp].term == self.currentTerm:
+                        print("Next commit index is {0}".format(temp))
+                        logging.debug("Next commit index is {0}".format(temp))
+                        self.commitIndex = temp
+                        self.log[temp].iscommitted = True
+                    else:
+                        print(
+                            "Entry ID:{0} is replicated in majority but was not appended by current term {1} and "
+                            "leader {1}".format(
+                                temp, self.currentTerm, self.id))
+                        logging.debug(
+                            "Entry ID:{0} is replicated in majority but was not appended by current term {1} and "
+                            "leader {1}".format(
+                                temp, self.currentTerm, self.id))
+                sleep(3)
+                print("Waked up")
+                temp += 1
             else:
-                print("Next index does not exist in the log next index {0}".format(temp))
-                logging.debug("Next index does not exist in the log next index {0}".format(temp))
-            for i in range(len(self.log)):
-                if i != (self.id - 1):
-                    if temp <= self.matchIndex[i - 1]:
-                        count = count + 1
-            if count >= self.getSimpleMajority():
-                print("Next commit index is {0}".format(temp))
-                logging.debug("Next commit index is {0}".format(temp))
-                self.commitIndex = temp
-            print("Waked up")
-        else:
-            # print("Not the leader to find the commit index")
-            pass
+                # print("Not the leader to find the commit index")
+                pass
 
     def addRequest(self, entry):
         if self.state is State.LEADER:
@@ -514,7 +537,7 @@ class Raft:
                     len(self.nextIndex)) + " nextIndexValue: " + str(self.nextIndex[k - 1]))
                 logging.debug("Length " + str(len(self.log)) + " k: " + str(k) + " nextIndex " + str(
                     len(self.nextIndex)) + " nextIndexValue: " + str(self.nextIndex[k - 1]))
-                if not self.nextIndex[k - 1] > self.getLastIndex():  # need to do this check again for HB without
+                if not (self.nextIndex[k - 1] > self.getLastIndex()):  # need to do this check again for HB without
                     # entries
                     values.append(self.log[self.nextIndex[k - 1]])
             if len(values) == 0:
@@ -547,7 +570,7 @@ class Raft:
                         print("Reducing the next index value for node {0}".format(k))
                         logging.debug("AppendEntry was rejected by node {0}".format(k))
                         logging.debug("Reducing the next index value for node {0}".format(k))
-                        self.nextIndex[k - 1] = self.nextIndex[k - 1] - 1
+                        self.nextIndex[k - 1] = self.nextIndex[k - 1] - 1 if self.nextIndex[k - 1] > 1 else 0
                         print("try again with the last ")
             else:
                 print("Something happened. Node {0} is no longer the leader".format(self.id))
@@ -730,6 +753,8 @@ class Raft:
             resp = input("Choice: ").lower().split()
             if not resp:
                 continue
+            elif resp[0] == 'r':
+                self._diagnostics()
             elif resp[0] == 'd':
                 self.map[1].printTest()
             elif resp[0] == 'p':
@@ -738,6 +763,30 @@ class Raft:
                 self.addRequest(None)
             elif resp[0] == 'e':
                 exit(0)
+
+    def _diagnostics(self):
+        print("Printing Diagnostics")
+        print("Node {0}".format(self.id))
+        print("ServerIP: {0}".format(self.HOST))
+        print("Raft Server IP: {0}".format(self.clientip))
+        print("Raft Port: {0}".format(self.clientip))
+        print("CommitIndex: {0}".format(self.commitIndex))
+        print("ServerIP: {0}")
+        print("ServerIP: {0}")
+
+    def updateCommittedEntries(self):
+        temp = self.commitIndex
+        for i in range(temp + 1):
+            self.log[i].iscommitted = True
+
+    def getLeaderInfo(self):
+        # returns leader's id or None if there is no leader at the moment
+        if self.state == State.FOLLOWER:
+            return self.votedFor
+        elif self.state == State.CANDIDATE:
+            return None
+        else:
+            return self.id
 
 
 class State(Enum):
@@ -754,7 +803,7 @@ class Entry:
         self.iscommitted = False
 
     def __str__(self):
-        return "id:{0} term:{1} val:{2}\t".format(self.id, self.term, self.value)
+        return "id:{0} term:{1} val:{2} isCommitted: {3}\t".format(self.id, self.term, self.value, self.iscommitted)
 
 
 class Vote:

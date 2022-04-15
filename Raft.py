@@ -56,6 +56,10 @@ class Raft:
         self.SERVER_PORT = 65431
         self.mapofNodes = None
 
+        self.timeoutFlag = False
+        self.leaderTimeoutFlag = False
+        self.electionTimeoutFlag = False
+
     # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the heartbeat for leader
     # We can create a daemon that issues appendEntries to all the nodes if they are the leader
@@ -410,7 +414,8 @@ class Raft:
             if self.state == State.FOLLOWER:
                 print("Chosen timeout for node {0} is {1}".format(self.id, randomTimeout))
                 logging.debug("Chosen timeout for node {0} is {1}".format(self.id, randomTimeout))
-                sleep(randomTimeout)
+                # sleep(randomTimeout)
+                self.raftsleep(randomTimeout, self, "timeoutFlag")
                 # print("Acquiring HB mutex")
                 logging.debug('Acquiring HB mutex')
                 self.mutexForHB.acquire()
@@ -447,7 +452,8 @@ class Raft:
                             break
                         else:
                             if self.state == State.CANDIDATE:
-                                sleep(electionTimeout)
+                                # sleep(electionTimeout)
+                                self.raftsleep(electionTimeout, self, "electionTimeoutFlag")
                                 print("Election timeout occurred. Restarting the election Node {0}".format(self.id))
                                 logging.debug(
                                     "Election timeout occurred. Restarting the election Node {0}".format(self.id))
@@ -466,7 +472,13 @@ class Raft:
                         self.callAppendEntryForaSingleNode(k, v, hb=True)
                         # v.appendEntries(info)
 
-                sleep(randomTimeout)
+                # sleep(randomTimeout)
+                self.raftsleep(randomTimeout, self, "leaderTimeoutFlag")
+                # This is to manually timeout the Leader
+                if self.timeoutFlag:
+                    self.receivedHeartBeat = False
+                    self.state = State.FOLLOWER
+                    continue
                 # print("Sending Heartbeats")
                 logging.debug("Sending Heartbeats")
 
@@ -800,6 +812,11 @@ class Raft:
             elif resp[0] == 'a':
                 x = input("What do you want to add?")
                 self.addRequest(x)
+            elif resp[0] == 't':
+                self.timeoutFlag = True
+                self.receivedHeartBeat = False
+                self.leaderTimeoutFlag = True
+                self.electionTimeoutFlag = False
             elif resp[0] == 'e':
                 exit(0)
 
@@ -810,7 +827,7 @@ class Raft:
         print("Raft Server IP: {0}".format(self.clientip))
         print("Raft Port: {0}".format(self.clientip))
         print("CommitIndex: {0}".format(self.commitIndex))
-        print("ServerIP: {0}")
+        print("Current Term : {0}".format(self.currentTerm))
         print("ServerIP: {0}")
 
     def updateCommittedEntries(self):
@@ -827,14 +844,18 @@ class Raft:
         else:
             return self.id
 
-    def newSleep(self, seconds, flag=False):
+    def raftsleep(self, seconds, obj, flagname=""):
         startingtime = time.perf_counter()
-        while not flag:
+        flag = False if flagname == "" else getattr(obj, flagname)
+        while not getattr(obj, flagname):
             now = time.perf_counter()
             if now - startingtime >= seconds:
+                setattr(obj, flagname, False)
                 return
         print("Flag was set to True")
         logging.debug("Flag was set to True")
+        setattr(obj, flagname, False)
+        print("Flag {0} changed to False-> {1}".format(flagname, getattr(obj, flagname)))
 
 
 class State(Enum):

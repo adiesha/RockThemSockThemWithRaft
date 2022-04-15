@@ -10,18 +10,29 @@ class Server():
     def __init__(self, maxNodes=4, host="127.0.0.1"):
         self.HOST = host  # Standard loopback interface address (localhost)
         self.PORT = 65431  # Port to listen on (non-privileged ports are > 1023)
-        self.mutex = threading.Lock()
+        self.mutexForNode = threading.Lock()
+        self.mutexForClient = threading.Lock()
         self.seq = 0
+        self.client = 100
         self.map = {}
         self.count = maxNodes
 
     def getNewSeq(self):
-        self.mutex.acquire()
+        self.mutexForNode.acquire()
         try:
             self.seq = self.seq + 1
             temp = self.seq
         finally:
-            self.mutex.release()
+            self.mutexForNode.release()
+        return temp
+
+    def getNewClient(self):
+        self.mutexForClient.acquire()
+        try:
+            self.client = self.client + 1
+            temp = self.client
+        finally:
+            self.mutexForClient.release()
         return temp
 
     def receiveWhole(self, conn):
@@ -86,6 +97,12 @@ class Server():
                                 print("Maximum Number of nodes connected. Server is closing down")
                                 s.close()
                                 exit(0)
+                        if reqType == "4":
+                            client = self.getNewClient()
+                            x = {"seq": str(client)}
+                            y = json.dumps(x)
+                            print(y)
+                            conn.sendall(str.encode(y))
                             # self.sendNewMap()
 
 

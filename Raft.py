@@ -25,7 +25,7 @@ class Raft:
         self.votedFor = None
         self.log = []
         self.map = None  # Map about the other nodes
-        self.noOfNodes = None
+        self.noOfNodes = 0
 
         self.state = State.FOLLOWER
         self.leader = None
@@ -52,6 +52,12 @@ class Raft:
         self.clientPort = None
         self.SERVER_PORT = 65431
         self.mapofNodes = None
+
+        # Game state Variables
+        self.blueID = None
+        self.blueState = None
+        self.redID = None
+        self.redState = None
 
     # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the heartbeat for leader
@@ -286,8 +292,9 @@ class Raft:
         info['value'] = pickle.dumps(entry)
 
         # Node is the leader
-        for k, v, in self.map.items():
-            v.appendEntries(info)
+        for k, v in self.map.items():
+            if k < 100:
+                v.appendEntries(info)
         pass
 
     # This method should invoke heartbeat function of other nodes
@@ -312,7 +319,7 @@ class Raft:
             "Node:{0} Term: {1} state: {2} votedFor: {3}".format(self.id, self.currentTerm, self.state, self.votedFor))
 
         for k, v in self.map.items():
-            if k != self.id:
+            if k != self.id and k < 100:
                 # result = self.createDaemon(v.requestVote, inf)
                 self.requestVoteFromNode(k, v, inf, vote)
 
@@ -442,7 +449,7 @@ class Raft:
                 info = self.createApppendEntryInfo()
                 info['value'] = None
                 for k, v in self.map.items():
-                    if k != self.id:
+                    if k != self.id and k < 100:
                         self.callAppendEntryForaSingleNode(k, v, hb=True)
                         # v.appendEntries(info)
 
@@ -501,25 +508,7 @@ class Raft:
                 # print("Not the leader to find the commit index")
                 pass
 
-    def addRequest(self, value):
-        if self.state is State.LEADER:
-            # add the entry to the log
-            entry = Entry(0, self.currentTerm)  # id is not the correct one so we update it in the next two lines
-            entry.value = value
-            self.log.append(entry)
-            entry.id = len(self.log) - 1
-            print("Entry ID: {0}".format(entry.id))
-            logging.debug("Entry ID: {0}".format(entry.id))
-
-            for k, v in self.map.items():
-                if k != self.id:
-                    self.callAppendEntryForaSingleNode(k, v)
-
-        else:
-            print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
-            logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
-            return False
-
+             
     def callAppendEntryForaSingleNode(self, k, v, hb=False):
         # this method should spawn a thread
         while True:
@@ -626,7 +615,9 @@ class Raft:
             self.createProxyMap()
             print(self.map)
             logging.debug(self.map)
-            self.noOfNodes = len(self.map)
+            for k, v, in self.map.items():
+                if k < 100:
+                    self.noOfNodes +=1
 
             # self.createThreadToListen()
             # self.createHeartBeatThread()
@@ -791,6 +782,98 @@ class Raft:
             return self.id
 
 
+    def setPlayer(self, id, input):
+        if self.state is State.LEADER:
+            flag = True
+            for e in self.log:
+                if e.choice == input:
+                    flag = False
+            if flag:
+                entry = Entry(0, self.currentTerm)            
+                self.log.append(entry)                 
+                entry.player = id
+                entry.choice = input
+                entry.move = "c"
+                entry.id = len(self.log) - 1
+                print("Entry ID: {0}".format(entry.id))
+                logging.debug("Entry ID: {0}".format(entry.id))
+
+                for k, v in self.map.items():
+                    if k != self.id and k < 100:
+                        self.callAppendEntryForaSingleNode(k, v)
+
+                if input == 1:
+                    self.redID = id
+                else:
+                    self.blueID = id
+
+                return 1
+            else:
+                return 2
+        else:
+            print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
+            logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
+            return 3
+
+    def playerMove(self, id, input):
+        if self.state is State.LEADER:
+            if id == self.blueID:
+                opp = self.redState
+            else:
+                opp = self.blueState
+            if input == "q":
+                if id == self.blueID:
+                    self.blueState = None
+                else:
+                    self.redState = None
+                if opp == "a":
+                    return 1
+                else:
+                    if random.random() < 0.10:
+                        return 2
+                    else:
+                        return 3
+            elif input == "w":
+                if id == self.blueID:
+                    self.blueState = None
+                else:
+                    self.redState = None
+                if opp == "s":
+                    return 1
+                else:
+                    if random.random() < 0.10:
+                        return 2
+                    else:
+                        return 3
+            elif input == "a":
+                if id == self.blueID:
+                    self.blueState = "a"
+                else:
+                    self.redState = "a"
+            elif input == "s":
+                if id == self.blueID:
+                    self.blueState = "s"
+                else:
+                    self.redState = "s"
+
+            entry = Entry(0, self.currentTerm)             
+            self.log.append(entry)
+            entry.player = id
+            entry.move = input
+            entry.id = len(self.log) - 1 
+            print("Entry ID: {0}".format(entry.id))
+            logging.debug("Entry ID: {0}".format(entry.id))
+
+            for k, v in self.map.items():
+                if k != self.id and k < 100:
+                    self.callAppendEntryForaSingleNode(k, v)
+
+        else:
+            print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
+            logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
+            return False
+
+
 class State(Enum):
     FOLLOWER = 1
     CANDIDATE = 2
@@ -799,13 +882,15 @@ class State(Enum):
 
 class Entry:
     def __init__(self, id, term):
-        self.value = None
         self.id = id
         self.term = term
+        self.player = None
+        self.choice = None
+        self.move = None
         self.iscommitted = False
 
     def __str__(self):
-        return "id:{0} term:{1} val:{2} isCommitted: {3}\t".format(self.id, self.term, self.value, self.iscommitted)
+        return "Entry id:{0} term:{1} Player:{2} Choice:{3} Move:{4} isCommitted: {5}\t".format(self.id, self.term, self.player, self.choice, self.move, self.iscommitted)
 
 
 class Vote:
@@ -820,6 +905,8 @@ class Vote:
         self.mutex.acquire()
         self.votes = self.votes + 1
         self.mutex.release()
+
+
 
 
 if __name__ == "__main__":

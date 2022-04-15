@@ -53,7 +53,11 @@ class Raft:
         self.SERVER_PORT = 65431
         self.mapofNodes = None
 
-        self.players = {}
+        # Game state Variables
+        self.blueID = None
+        self.blueState = None
+        self.redID = None
+        self.redState = None
 
     # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the heartbeat for leader
@@ -797,11 +801,10 @@ class Raft:
                         self.callAppendEntryForaSingleNode(k, v)
 
                 if input == 1:
-                    pl = Player("red")
-                    self.players[id] = pl
+                    self.redID = id
                 else:
-                    p2 = Player("blue")
-                    self.players[id] = p2
+                    self.blueID = id
+
                 return 1
             else:
                 return 2
@@ -812,43 +815,44 @@ class Raft:
 
     def playerMove(self, id, input):
         if self.state is State.LEADER:
+            if id == self.blueID:
+                opp = self.redState
+            else:
+                opp = self.blueState
             if input == "q":
-                for k, v in self.players.items():
-                    if k != id:
-                        print(str(v.state))
-                        if v.state == "a":
-                            return 1
-                        else:
-                            if random.random() < 0.10:
-                                return 2
-                            else:
-                                return 3
+                if id == self.blueID:
+                    self.blueState = None
+                else:
+                    self.redState = None
+                if opp == "a":
+                    return 1
+                else:
+                    if random.random() < 0.10:
+                        return 2
                     else:
-                        v.state == None
+                        return 3
             elif input == "w":
-                for k, v in self.players.items():
-                    if k != id:
-                        if v.state == "s":
-                            return 1
-                        else:
-                            if random.random() < 0.10:
-                                return 2
-                            else:
-                                return 3
+                if id == self.blueID:
+                    self.blueState = None
+                else:
+                    self.redState = None
+                if opp == "s":
+                    return 1
+                else:
+                    if random.random() < 0.10:
+                        return 2
                     else:
-                        v.state == None
+                        return 3
             elif input == "a":
-                for k, v in self.players.items():
-                    print(v)
-                    print("K : "+str(k) + " ID : "+str(id))
-                    if k == id:
-                       self.players[id].state == "a"
-                       print (v)
+                if id == self.blueID:
+                    self.blueState = "a"
+                else:
+                    self.redState = "a"
             elif input == "s":
-                for k, v in self.players.items():
-                    if k == id:
-                        self.players[id].state == "s"
-                        print (v)
+                if id == self.blueID:
+                    self.blueState = "s"
+                else:
+                    self.redState = "s"
 
             entry = Entry(0, self.currentTerm)             
             self.log.append(entry)
@@ -900,13 +904,7 @@ class Vote:
         self.votes = self.votes + 1
         self.mutex.release()
 
-class Player:
-    def __init__(self, colour):
-        self.colour = colour
-        self.state = None
 
-    def __str__(self):
-        return "colour:{0} state:{1}\t".format(self.colour, self.state)
 
 
 if __name__ == "__main__":

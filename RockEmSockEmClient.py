@@ -2,7 +2,7 @@ import json
 import random
 import sys
 import socket
-import acd
+import time
 import os
 import logging
 import threading
@@ -144,8 +144,8 @@ class RockEm:
     def choosePlayer(self):
         while True:
             print("Enter your choice:")
-            print("Red Rocker [1]")
-            print("Blue Bomber [2]")
+            print("Red Rocker\t[1]")
+            print("Blue Bomber\t[2]")
             resp = input("Choice: ")
             ans = self.map[self.leader_id].setPlayer(self.id, resp)
             if ans == 1:
@@ -160,20 +160,37 @@ class RockEm:
     def menu(self):
         while True:
             print("Choose an option")
-            print("punch_with_left [Q]")
-            print("punch_with_right [W]")
-            print("block_with_left [A]")
-            print("block_with_right [S]")
+            print("punch_with_left\t[Q]")
+            print("punch_with_right\t[W]")
+            print("block_with_left\t[A]")
+            print("block_with_right\t[S]")
             resp = input("Choice: ").lower()
+            if resp == "q":
+                print("Left Punch!")
+            elif resp == "w":
+                print("Right Punch!")
+            elif resp == "a":
+                print("Left Block!")
+            elif resp == "s":
+                print("Right Block!")            
+            
             ans = self.map[self.leader_id].playerMove(self.id, resp)
             if ans == 1:
-                print("Punch blocked!")
+                print("Punch Bocked!")
             elif ans == 2:
-                print("Hit landed! You win!")
-                exit(0)
-            elif ans == 3:
                 print("Punch Dodged!")
-            
+            else:
+                print("Hit landed! You win!")
+                try:
+                    self.map[ans].gameOver()
+                except Exception:
+                    pass
+                os._exit(1)(0)
+    
+    def gameOver(self):
+        print("You got Hit! Game Over!")
+        time.sleep(1)
+        os._exit(1)(0)            
 
     def main(self):
         print('Number of arguments:', len(sys.argv), 'arguments.')
@@ -193,9 +210,9 @@ class RockEm:
         self.createRPCServer()
 
         print(
-            "Ready to start the RockEm Server. Please wait until all the nodes are ready to continue. Then press Enter")
+            "Ready to start the RockEm Client. Please wait until all the nodes are ready to continue. Then press Enter")
         if input() == "":
-            print("Started Creating the RockEm Server")
+            print("Started Creating the RockEm Client")
             self.mapofNodes = self.getMapData()
             print(self.mapofNodes)
             print("Creating the proxy Map")

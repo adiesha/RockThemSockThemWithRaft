@@ -803,11 +803,6 @@ class Raft:
                     if k != self.id and k < 100:
                         self.callAppendEntryForaSingleNode(k, v)
 
-                # if input == "1":
-                #     self.redID = id
-                # else:
-                #     self.blueID = id
-
                 return 1
             else:
                 return 2
@@ -830,33 +825,37 @@ class Raft:
             for k, v in self.map.items():
                 if k != self.id and k < 100:
                     self.callAppendEntryForaSingleNode(k, v)
-                    
+
             if id == self.blueID:
-                opp = self.redState
+                oppID = self.redID
+                oppState = self.redState
             else:
-                opp = self.blueState
+                oppID = self.blueID
+                oppState = self.blueState
             if input == "q":
-                if opp == "a":
+                if oppState == "a":
                     return 1
                 else:
                     if random.random() < 0.10:
-                        return 2
+                        return int(oppID)
                     else:
-                        return 3
+                        return 2
             elif input == "w":
-                if opp == "s":
+                if oppState == "s":
                     return 1
                 else:
                     if random.random() < 0.10:
-                        return 2
+                        return int(oppID)
                     else:
-                        return 3
+                        return 2
 
         else:
             print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
             logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
             return False
 
+
+    
     def displayState(self):
         print("Blue Node: "+ str(self.blueID))
         print("Blue State: "+ str(self.blueState))

@@ -92,10 +92,10 @@ class Server():
 if __name__ == '__main__':
     print('Number of arguments:', len(sys.argv), 'arguments.')
     print('Argument List:', str(sys.argv))
-    mxnodes = 4
+    mxnodes = 5 + 2
     if len(sys.argv) > 1:
         print("Maximum Number of nodes allowed {0}".format(sys.argv[1]))
-        mxnodes = int(sys.argv[1])
+        mxnodes = int(sys.argv[1]) + 2
     else:
         print("Maximum number of nodes was not inputted. Default value is 4")
 

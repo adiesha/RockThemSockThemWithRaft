@@ -6,7 +6,9 @@ import random
 import socket
 import sys
 import threading
+import time
 from enum import Enum
+from http.client import CannotSendRequest
 from time import sleep
 from xmlrpc.client import ServerProxy
 from xmlrpc.server import SimpleXMLRPCServer
@@ -16,6 +18,7 @@ import numpy as np
 
 # ToDO: Mutex, commiting, threading, rpc threading, exceptions handling, basic input/output
 #  adding function for clients (who is the leader?, persistent storage and restart, getting gamestate)
+# add mutex to AddRequest
 
 class Raft:
     def __init__(self, id):
@@ -82,7 +85,8 @@ class Raft:
             prevLogTerm = info['previouslogterm']
             leadercommitIndex = info['leadercommit']
             print("leaddercommmit {0}".format(leadercommitIndex))
-
+            print("prevLogIndex {0}".format(prevLogIndex))
+            print(info)
             if prevLogIndex == -1:
                 pass
             else:
@@ -91,11 +95,15 @@ class Raft:
                     self.mutexForAppendEntry.release()
                     # print("Mutex for appendEntry is released in node {0}".format(self.id))
                     logging.debug("Mutex for appendEntry is released in node {0}".format(self.id))
+                    print(
+                        "Previous log term of the candidates {0} is not the same as the node's prevLogTerm {1}".format(
+                            prevLogTerm, self.log[prevLogIndex].term))
                     return False, self.currentTerm
 
             # received actual appendEntry do the logic
             entries = info['values']
             for e in entries:
+                print(e)
                 print("Appending Entries in node {0} by the leader".format(self.id))
                 print("Id of the entry that we are adding is {0}".format(e.id))
                 logging.debug("Appending Entries in node {0} by the leader".format(self.id))
@@ -327,12 +335,15 @@ class Raft:
             return False
 
     def intializevolatileStateOfTheLeader(self):
+        print("Initializing volatile state of the leader")
+        logging.debug("Initializing volatile state of the leader")
         if not self.log:
             self.nextIndex = np.zeros(self.noOfNodes, dtype=np.int32)
             self.matchIndex = np.zeros(self.noOfNodes, dtype=np.int32)
         else:
             lastIndex = self.getLastIndex()
-            self.nextIndex = np.zeros(lastIndex + 1, dtype=np.int32)
+            self.nextIndex = np.full(shape=self.noOfNodes, fill_value=lastIndex + 1, dtype=np.int32)
+            self.matchIndex = np.full(shape=self.noOfNodes, fill_value=self.commitIndex, dtype=np.int32)
 
     def createDaemon(self, func, inf):
         thread = threading.Thread(target=func, args=(inf,))
@@ -341,7 +352,14 @@ class Raft:
         return thread
 
     def requestVoteFromNode(self, k, proxy, inf, vote):
-        result = proxy.requestVote(inf)
+        try:
+            result = proxy.requestVote(inf)
+        except ConnectionRefusedError:
+            print("Connection refused from Node {0} updating the vote as False".format(k))
+            result = False
+        except CannotSendRequest:
+            print("Cannot send the message to node {0} from the node {1}".format(k, self.id))
+            result = False
         if result:
             vote.addVote()
         print("Election Result: Candidate {0} requestedNde {1} result: {2} term: {3}".format(self.id, k, result,
@@ -355,10 +373,11 @@ class Raft:
             return int(self.noOfNodes / 2) + 1
 
     def getLastTerm(self):
-        if not self.log:
+        prevLogIndex = -1 if self.getLastIndex() == -1 else self.getLastIndex() - 1
+        if prevLogIndex == -1:
             return 0
         else:
-            return self.log[-1].term
+            return self.log[prevLogIndex].term
 
     def getLastIndex(self):
         return -1 if not self.log else len(self.log) - 1
@@ -381,12 +400,13 @@ class Raft:
         dict['previouslogterm'] = self.getLastTerm()
         dict['values'] = None
         dict['leadercommit'] = self.commitIndex
+        print(dict)
 
         return dict
 
     def timeout(self):
         while True:
-            randomTimeout = random.randint(4, 8)
+            randomTimeout = random.randint(7, 12)
             if self.state == State.FOLLOWER:
                 print("Chosen timeout for node {0} is {1}".format(self.id, randomTimeout))
                 logging.debug("Chosen timeout for node {0} is {1}".format(self.id, randomTimeout))
@@ -418,7 +438,7 @@ class Raft:
                         "Timeout occurred NO Heartbeat was received by the node {0} earlier. Picking a new timeout".format(
                             self.id))
                     while True:
-                        electionTimeout = random.randint(2, 5)
+                        electionTimeout = random.randint(4, 7)
                         # we can send the timeout period to following method as well
                         # Not sure what is the best solution yet
                         result = self._invokeRequestVoteRPV()
@@ -436,7 +456,7 @@ class Raft:
                                 logging.debug(
                                     "Looks like we found a leader for the term, leader is {0}".format(self.votedFor))
             elif self.state == State.LEADER:
-                randomTimeout = random.randint(3, 4)
+                randomTimeout = random.randint(2, 3)
                 # send heartbeats
                 # self.updatecommitIndex()
                 info = self.createApppendEntryInfo()
@@ -464,6 +484,11 @@ class Raft:
         temp = self.commitIndex + 1
         while True:
             if self.state == State.LEADER:
+                if self.matchIndex is None or self.nextIndex is None:
+                    sleep(2)
+                    print("Leaders volatile state has not been updated retrying")
+                    logging.debug("Leaders volatile state has not been updated retrying")
+                    continue
                 print("Current Commit Index {0}".format(self.commitIndex))
                 logging.debug("Current Commit Index {0}".format(self.commitIndex))
                 # temp = self.commitIndex + 1
@@ -477,6 +502,7 @@ class Raft:
                     continue
                 for i in range(self.noOfNodes):
                     if i != self.id:
+                        print("matchedIndexInCommitThread" + str(self.matchIndex))
                         if temp <= self.matchIndex[i - 1]:
                             count = count + 1
                 if count >= self.getSimpleMajority():
@@ -522,61 +548,72 @@ class Raft:
 
     def callAppendEntryForaSingleNode(self, k, v, hb=False):
         # this method should spawn a thread
-        while True:
-            info = self.createApppendEntryInfo()
-            values = []
-            if self.nextIndex[k - 1] > self.getLastIndex() and not hb:
-                print("Node {0} is up to date".format(k))
-                logging.debug("Node {0} is up to date".format(k))
-                return True
-            hb = False  # HB flag is set to false because we do not need to loop this indefinitely
-            if not self.log:
-                print("Log is empty, Therefore values would be empty as well. This would be a heartbeat")
-                logging.debug("Log is empty, Therefore values would be empty as well. This would be a heartbeat")
-            else:
-                print("Length " + str(len(self.log)) + " k: " + str(k) + " nextIndex " + str(
-                    len(self.nextIndex)) + " nextIndexValue: " + str(self.nextIndex[k - 1]))
-                logging.debug("Length " + str(len(self.log)) + " k: " + str(k) + " nextIndex " + str(
-                    len(self.nextIndex)) + " nextIndexValue: " + str(self.nextIndex[k - 1]))
-                if not (self.nextIndex[k - 1] > self.getLastIndex()):  # need to do this check again for HB without
-                    # entries
-                    values.append(self.log[self.nextIndex[k - 1]])
-            if len(values) == 0:
-                info['values'] = None
-            else:
-                info['values'] = pickle.dumps(values)
-                # print(info['values'])
-                # print(pickle.loads(info['values']))
-            if self.state is State.LEADER:
-                result, term = v.appendEntries(info)
-                print("RESULT: {0} Term {1}".format(result, term))
-                logging.debug("RESULT: {0} Term {1}".format(result, term))
-                if result:
-                    # update the nextIndex and matchindex
-                    if values:
-                        id = values[-1].id
-                        if self.matchIndex[k - 1] <= id:
-                            self.matchIndex[k - 1] = id
-                        self.nextIndex[k - 1] = id + 1
-                    continue
-                    # return True
+        try:
+            while True:
+                info = self.createApppendEntryInfo()
+                values = []
+                print("NextIndex:" + str(self.nextIndex))
+                if self.nextIndex[k - 1] > self.getLastIndex() and not hb:
+                    print("Node {0} is up to date".format(k))
+                    logging.debug("Node {0} is up to date".format(k))
+                    return True
+                hb = False  # HB flag is set to false because we do not need to loop this indefinitely
+                if not self.log:
+                    print("Log is empty, Therefore values would be empty as well. This would be a heartbeat")
+                    logging.debug("Log is empty, Therefore values would be empty as well. This would be a heartbeat")
                 else:
-                    if term > self.currentTerm:
-                        print("Node {0} is no longer the leader. converting to Follower".format(self.id))
-                        logging.debug("Node {0} is no longer the leader. converting to Follower".format(self.id))
-                        self.state = State.FOLLOWER
-                        return False
+                    print("Length " + str(len(self.log)) + " k: " + str(k) + " nextIndex " + str(
+                        len(self.nextIndex)) + " nextIndexValue: " + str(self.nextIndex[k - 1]))
+                    logging.debug("Length " + str(len(self.log)) + " k: " + str(k) + " nextIndex " + str(
+                        len(self.nextIndex)) + " nextIndexValue: " + str(self.nextIndex[k - 1]))
+                    if not (self.nextIndex[k - 1] > self.getLastIndex()):  # need to do this check again for HB without
+                        # entries
+                        values.append(self.log[self.nextIndex[k - 1]])
+                if len(values) == 0:
+                    info['values'] = None
+                else:
+                    info['values'] = pickle.dumps(values)
+                    # print(info['values'])
+                    # print(pickle.loads(info['values']))
+                if self.state is State.LEADER:
+                    result, term = v.appendEntries(info)
+                    print("RESULT: {0} Term {1}".format(result, term))
+                    logging.debug("RESULT: {0} Term {1}".format(result, term))
+                    if result:
+                        # update the nextIndex and matchindex
+                        if values:
+                            id = values[-1].id
+                            print("buuuwwa" + str(self.matchIndex))
+                            if self.matchIndex[k - 1] <= id:
+                                self.matchIndex[k - 1] = id
+                            self.nextIndex[k - 1] = id + 1
+                        continue
+                        # return True
                     else:
-                        print("AppendEntry was rejected by node {0}".format(k))
-                        print("Reducing the next index value for node {0}".format(k))
-                        logging.debug("AppendEntry was rejected by node {0}".format(k))
-                        logging.debug("Reducing the next index value for node {0}".format(k))
-                        self.nextIndex[k - 1] = self.nextIndex[k - 1] - 1 if self.nextIndex[k - 1] > 1 else 0
-                        print("try again with the last ")
-            else:
-                print("Something happened. Node {0} is no longer the leader".format(self.id))
-                logging.debug("Something happened. Node {0} is no longer the leader".format(self.id))
-                return False
+                        if term > self.currentTerm:
+                            print("Node {0} is no longer the leader. converting to Follower".format(self.id))
+                            logging.debug("Node {0} is no longer the leader. converting to Follower".format(self.id))
+                            self.state = State.FOLLOWER
+                            return False
+                        else:
+                            print("AppendEntry was rejected by node {0}".format(k))
+                            print("Reducing the next index value for node {0}".format(k))
+                            logging.debug("AppendEntry was rejected by node {0}".format(k))
+                            logging.debug("Reducing the next index value for node {0}".format(k))
+                            self.nextIndex[k - 1] = self.nextIndex[k - 1] - 1 if self.nextIndex[k - 1] > 1 else 0
+                            print("try again with the last ")
+                else:
+                    print("Something happened. Node {0} is no longer the leader".format(self.id))
+                    logging.debug("Something happened. Node {0} is no longer the leader".format(self.id))
+                    return False
+        except ConnectionRefusedError:
+            print("Node {0} connection was refused".format(k))
+            logging.error("Node {0} connection was refused".format(k))
+            return False
+        except CannotSendRequest:
+            print("Node {0} cannot send request".format(k))
+            logging.error("Node {0} cannot send request".format(k))
+            return False
 
     def printLog(self):
         print("Printing the log of node {0}".format(self.id))
@@ -789,6 +826,15 @@ class Raft:
             return None
         else:
             return self.id
+
+    def newSleep(self, seconds, flag=False):
+        startingtime = time.perf_counter()
+        while not flag:
+            now = time.perf_counter()
+            if now - startingtime >= seconds:
+                return
+        print("Flag was set to True")
+        logging.debug("Flag was set to True")
 
 
 class State(Enum):

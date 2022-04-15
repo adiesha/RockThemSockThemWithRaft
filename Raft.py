@@ -33,6 +33,7 @@ class Raft:
         # volatile states
         self.commitIndex = -1
         self.lastApplied = 0
+        self.stateIndex = 0
 
         # volatile state on leader
         self.nextIndex = None
@@ -508,7 +509,6 @@ class Raft:
                 # print("Not the leader to find the commit index")
                 pass
 
-             
     def callAppendEntryForaSingleNode(self, k, v, hb=False):
         # this method should spawn a thread
         while True:
@@ -740,20 +740,20 @@ class Raft:
 
     def menu(self, d):
         self.createTimeoutThread()
+        self.createGameStateUpdateThread()
         while True:
             print("Display Raft DashBoard\t[d]")
+            print("Print log\t[p]")
+            print("Print Game State\t[g]")
             resp = input("Choice: ").lower().split()
             if not resp:
                 continue
-            elif resp[0] == 'd':
-                self._diagnostics()
-            elif resp[0] == 'q':
-                self.map[1].printTest()
             elif resp[0] == 'r':
+                self._diagnostics()
+            elif resp[0] == 'p':
                 self.printLog()
-            elif resp[0] == 'a':
-                x = input("What do you want to add?")
-                self.addRequest(x)
+            elif resp[0] == 'g':
+                self.displayState()
             elif resp[0] == 'e':
                 exit(0)
 
@@ -802,11 +802,12 @@ class Raft:
                     if k != self.id and k < 100:
                         self.callAppendEntryForaSingleNode(k, v)
 
-                if input == 1:
+                if input == "1":
                     self.redID = id
                 else:
                     self.blueID = id
 
+                self.stateIndex +=1
                 return 1
             else:
                 return 2
@@ -867,12 +868,48 @@ class Raft:
             for k, v in self.map.items():
                 if k != self.id and k < 100:
                     self.callAppendEntryForaSingleNode(k, v)
-
+            
+            self.stateIndex +=1
         else:
             print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
             logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
             return False
 
+    def displayState(self):
+        print("Blue Node: "+ str(self.blueID))
+        print("Blue State: "+ str(self.blueState))
+        print("Red Node: "+ str(self.redID))
+        print("Red State: "+ str(self.redState))
+
+    def createGameStateUpdateThread(self):
+        thread = threading.Thread(target=self.stateUpdate)
+        thread.daemon = True
+        thread.start()
+
+    def stateUpdate(self):
+        while True:
+            if self.stateIndex < self.commitIndex+1:
+                for e in range(self.stateIndex, self.commitIndex+1):
+                    if self.log[e].move == "c":
+                        if self.log[e].choice == "1":
+                            self.redID = self.log[e].player
+                        elif self.log[e].choice == "2":
+                            self.blueID = self.log[e].player
+                    elif self.log[e].move == "q" or self.log[e].move == "w":
+                        if self.log[e].player == self.redID:
+                            self.redState = None
+                        else:
+                            self.blueState = None
+                    elif self.log[e].move == "a":
+                        if self.log[e].player == self.redID:
+                            self.redState = "a"
+                        else:
+                            self.blueState = "a"
+                    elif self.log[e].move == "s":
+                        if self.log[e].player == self.redID:
+                            self.redState = "s"
+                        else:
+                            self.blueState = "s"
 
 class State(Enum):
     FOLLOWER = 1

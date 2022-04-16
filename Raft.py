@@ -833,14 +833,6 @@ class Raft:
                 oppID = self.blueID
                 oppState = self.blueState
             if input == "q":
-                if oppState == "a":
-                    return 1
-                else:
-                    if random.random() < 0.10:
-                        return int(oppID)
-                    else:
-                        return 2
-            elif input == "w":
                 if oppState == "s":
                     return 1
                 else:
@@ -848,7 +840,16 @@ class Raft:
                         return int(oppID)
                     else:
                         return 2
-
+            elif input == "w":
+                if oppState == "a":
+                    return 1
+                else:
+                    if random.random() < 0.10:
+                        return int(oppID)
+                    else:
+                        return 2
+            else:
+                return 0
         else:
             print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
             logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))

@@ -4,6 +4,7 @@ import sys
 import socket
 import time
 import os
+import gui
 import logging
 import threading
 from xmlrpc.client import ServerProxy
@@ -179,7 +180,7 @@ class RockEm:
                 print("Punch Bocked!")
             elif ans == 2:
                 print("Punch Dodged!")
-            else:
+            elif ans > 100:
                 print("Hit landed! You win!")
                 try:
                     self.map[ans].gameOver()

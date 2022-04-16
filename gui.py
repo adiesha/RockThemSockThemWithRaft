@@ -10,9 +10,10 @@ python -m arcade.examples.sprite_move_animation
 """
 import arcade
 import random
+import os
 
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
+SCREEN_WIDTH = 1200
+SCREEN_HEIGHT = 700
 SCREEN_TITLE = "Rock ‘Em Sock ‘Em Robots"
 
 COIN_SCALE = 0.5
@@ -160,7 +161,6 @@ class MyGame(arcade.Window):
     """ Main application class. """
 
     def __init__(self, width, height, title):
-        """ Set up the game and initialize the variables. """
         super().__init__(width, height, title)
 
         # Sprite lists
@@ -172,6 +172,10 @@ class MyGame(arcade.Window):
         self.player = None
 
     def setup(self):
+
+        dirname = os.path.dirname(__file__)
+        self.background = arcade.load_texture(os.path.join(dirname, 'assets/ring.jpeg'))
+
         self.player_list = arcade.SpriteList()
         self.coin_list = arcade.SpriteList()
 
@@ -194,15 +198,13 @@ class MyGame(arcade.Window):
             self.coin_list.append(coin)
 
         # Set the background color
-        arcade.set_background_color(arcade.color.AMAZON)
+        # arcade.set_background_color(arcade.color.AMAZON)
 
     def on_draw(self):
-        """
-        Render the screen.
-        """
 
-        # This command has to happen before we start drawing
         self.clear()
+
+        arcade.draw_lrwh_rectangle_textured(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT,self.background)
 
         # Draw all the sprites.
         self.coin_list.draw()

@@ -51,14 +51,16 @@ class Raft:
         self.voteMutex = threading.Lock()
 
         self.HOST = "127.0.0.1"
-        self.clientip = "127.0.0.1"
-        self.clientPort = None
+        self.clientip = "127.0.0.1"  # needs to be persisted
+        self.clientPort = None  # needs to be persisted
         self.SERVER_PORT = 65431
         self.mapofNodes = None
 
         self.timeoutFlag = False
         self.leaderTimeoutFlag = False
         self.electionTimeoutFlag = False
+
+        self._persist = None
 
     # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the heartbeat for leader
@@ -95,7 +97,10 @@ class Raft:
                 pass
             else:
                 print("prev:" + str(prevLogIndex))
+                # if node is behind the leader prevlogindex may not be in the log
+                print("len of log" + str(len(self.log)))
                 if self.log[prevLogIndex].term != prevLogTerm:
+                    print("haha")
                     self.mutexForAppendEntry.release()
                     # print("Mutex for appendEntry is released in node {0}".format(self.id))
                     logging.debug("Mutex for appendEntry is released in node {0}".format(self.id))
@@ -511,8 +516,9 @@ class Raft:
                 if 0 <= temp < len(self.log):
                     count = count + 1
                 else:
-                    print("Next index does not exist in the log next index {0}".format(temp))
-                    logging.debug("Next index does not exist in the log next index {0}".format(temp))
+                    print("Next index does not exist in the log next index {0}, length of log {1}".format(temp,
+                                                                                                          len(self.log)))
+                    logging.debug("Next index does not exist in the log next index {0}, length of log {1}".format(temp, len(self.log)))
                     sleep(3)
                     continue
                 for i in range(self.noOfNodes):
@@ -526,6 +532,7 @@ class Raft:
                         logging.debug("Next commit index is {0}".format(temp))
                         self.commitIndex = temp
                         self.log[temp].iscommitted = True
+                        temp += 1
                     else:
                         print(
                             "Entry ID:{0} is replicated in majority but was not appended by current term {1} and "
@@ -537,7 +544,7 @@ class Raft:
                                 temp, self.currentTerm, self.id))
                 sleep(3)
                 print("Waked up")
-                temp += 1
+                # temp += 1
             else:
                 # print("Not the leader to find the commit index")
                 pass
@@ -585,18 +592,24 @@ class Raft:
                     if not (self.nextIndex[k - 1] > self.getLastIndex()):  # need to do this check again for HB without
                         # entries
                         values.append(self.log[self.nextIndex[k - 1]])
+                        info['previouslogindex'] = int(self.nextIndex[k - 1] - 1)
+                        info['previouslogterm'] = 0 if self.nextIndex[k - 1] - 1 < 0 else self.log[
+                            self.nextIndex[k - 1] - 1].term
+                        print("sdf: {0}".format(info['previouslogindex']))
+                        print("sdf2: {0}".format(info['previouslogterm']))
                 if len(values) == 0:
                     info['values'] = None
                 else:
                     info['values'] = pickle.dumps(values)
-                    # print(info['values'])
-                    # print(pickle.loads(info['values']))
+                    print(info['values'])
+                    print(pickle.loads(info['values']))
                 if self.state is State.LEADER:
                     result, term = v.appendEntries(info)
-                    print("RESULT: {0} Term {1}".format(result, term))
-                    logging.debug("RESULT: {0} Term {1}".format(result, term))
+                    print("RESULT: {0} Term {1} from Node{2}".format(result, term, k))
+                    logging.debug("RESULT: {0} Term {1} from Node{2}".format(result, term, k))
                     if result:
                         # update the nextIndex and matchindex
+                        print("values: {0}".format(values))
                         if values:
                             id = values[-1].id
                             print("buuuwwa" + str(self.matchIndex))
@@ -633,6 +646,9 @@ class Raft:
         except ConnectionResetError:
             print("Connection was reset in Node {0} while invoking the AppendEntries by node {1}".format(k, self.id))
             return False
+        except TypeError as e:
+            print(TypeError, e)
+            quit(0)
 
     def printLog(self):
         print("Printing the log of node {0}".format(self.id))
@@ -643,49 +659,73 @@ class Raft:
         print("")
         logging.debug("")
 
-    def main(self):
+    def _main(self):
         print('Number of arguments:', len(sys.argv), 'arguments.')
         print('Argument List:', str(sys.argv))
 
+        recoveryMode = False
         if len(sys.argv) > 1:
-            print("Server ip is {0}".format(sys.argv[1]))
-            self.HOST = sys.argv[1]
-            print("Server Ip updated")
+            print("Recovery Mode option was input")
+            recoveryInput = sys.argv[1]
+            if recoveryInput == "r":
+                print("Recovery Mode enabled")
+                recoveryMode = True
+            else:
+                print("Normal Mode enabled")
+                recoveryMode = False
 
         if len(sys.argv) > 2:
-            print("Client's ip is {0}".format(sys.argv[2]))
-            self.clientip = sys.argv[2]
+            print("Server ip is {0}".format(sys.argv[2]))
+            self.HOST = sys.argv[2]
+            print("Server Ip updated")
+
+        if len(sys.argv) > 3:
+            print("Client's ip is {0}".format(sys.argv[3]))
+            self.clientip = sys.argv[3]
 
         else:
             print("User did not choose a client ip default is 127.0.0.1")
             self.clientip = "127.0.0.1"
 
-        if len(sys.argv) > 3:
-            print("user inputted client port {0}".format(sys.argv[3]))
-            self.clientPort = int(sys.argv[3])
+        if len(sys.argv) > 4:
+            print("user inputted client port {0}".format(sys.argv[4]))
+            self.clientPort = int(sys.argv[4])
         else:
             print("User did not choose a port for the node. Random port between 55000-63000 will be selected")
             port = random.randint(55000, 63000)
             print("Random port {0} selected".format(port))
             self.clientPort = port
 
-        self.initializeTheNode()
-        self.sendNodePort()
-        self.createRPCServer()
+        if not recoveryMode:
+            self._initializeTheNode()
+            self._sendNodePort()
+            self._createRPCServer()
+            print(
+                "Ready to start the Raft Server. Please wait until all the nodes are ready to continue. Then press Enter")
+            if input() == "":
+                print("Started Creating the Raft Server")
+                self.mapofNodes = self.getMapData()
+                print(self.mapofNodes)
+                print("Creating the proxy Map")
+                self._createProxyMap()
+                print(self.map)
+                logging.debug(self.map)
+                self.noOfNodes = len(self.map)
 
-        print("Ready to start the Raft Server. Please wait until all the nodes are ready to continue. Then press Enter")
-        if input() == "":
-            print("Started Creating the Raft Server")
-            self.mapofNodes = self.getMapData()
-            print(self.mapofNodes)
-            print("Creating the proxy Map")
-            self.createProxyMap()
-            print(self.map)
-            logging.debug(self.map)
-            self.noOfNodes = len(self.map)
+                self._persist = Persist()
+                self._persist.updateNetworkInfo(self.HOST, self.clientip, self.clientPort)
+                self._persist.updateNodeInfo(self.id, self.mapofNodes, self.noOfNodes)
+                self._persist.updateCurrentInfo(0, None, [])
+                _persist(self._persist)
 
-            # self.createThreadToListen()
-            # self.createHeartBeatThread()
+                # self.createThreadToListen()
+                # self.createHeartBeatThread()
+                self.menu(self)
+        else:
+            print("Skipping Initialization mode and send Node Port")
+            nodeId = input("Input persistent ID")
+            self.recover(nodeId)
+            self._createRPCServer()
             self.menu(self)
 
     def getMapData(self):
@@ -707,7 +747,7 @@ class Raft:
             s.close()
             return resp2
 
-    def sendNodePort(self):
+    def _sendNodePort(self):
         # establish connection with server and give info about the client port
         print('Sending client port to Server')
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -723,7 +763,7 @@ class Raft:
             print(resp['response'])
             s.close()
 
-    def initializeTheNode(self):
+    def _initializeTheNode(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Connecting to HOSTL {0} port {1}".format(self.HOST, self.SERVER_PORT))
             s.connect((self.HOST, self.SERVER_PORT))
@@ -742,6 +782,11 @@ class Raft:
         finallogdir = os.path.join(currrent_dir, 'log')
         if not os.path.exists(finallogdir):
             os.mkdir(finallogdir)
+
+        currrent_dir = os.getcwd()
+        finalpersistdir = os.path.join(currrent_dir, 'persist')
+        if not os.path.exists(finalpersistdir):
+            os.mkdir(finalpersistdir)
         logging.basicConfig(filename="log/{0}.log".format(self.id), level=logging.DEBUG, filemode='w')
 
     def receiveWhole(self, s):
@@ -775,7 +820,7 @@ class Raft:
         jr = json.loads(input)
         return jr
 
-    def createRPCServer(self):
+    def _createRPCServer(self):
         print("Creating the RPC server for the Node {0}".format(self.id))
         print("Node {0} IP:{1} port: {2}".format(self.id, self.clientip, self.clientPort))
         thread = threading.Thread(target=self._executeRPCServer)
@@ -792,7 +837,7 @@ class Raft:
         except KeyboardInterrupt:
             print("Exiting")
 
-    def createProxyMap(self):
+    def _createProxyMap(self):
         self.map = {}
         for k, v in self.mapofNodes.items():
             print(k, v)
@@ -813,12 +858,14 @@ class Raft:
             elif resp[0] == 'd':
                 self._diagnostics()
             elif resp[0] == 'q':
-                self.map[1].printTest()
+                self.recover(self.id)
             elif resp[0] == 'r':
                 self.printLog()
             elif resp[0] == 'a':
                 x = input("What do you want to add?")
                 self.addRequest(x)
+            elif resp[0] == 'f':
+                self._fail = True
             elif resp[0] == 't':
                 self.timeoutFlag = True
                 self.receivedHeartBeat = False
@@ -835,6 +882,8 @@ class Raft:
         print("Raft Port: {0}".format(self.clientip))
         print("CommitIndex: {0}".format(self.commitIndex))
         print("Current Term : {0}".format(self.currentTerm))
+        print("MatchIndex: {0}".format(self.matchIndex))
+        print("NextIndex: {0}".format(self.nextIndex))
         print("ServerIP: {0}")
 
     def updateCommittedEntries(self):
@@ -866,6 +915,46 @@ class Raft:
         logging.debug("Flag was set to True")
         setattr(obj, flagname, False)
         print("Flag {0} changed to False-> {1}".format(flagname, getattr(obj, flagname)))
+
+    def recover(self, id):
+        file_to_read = open("persist/data{0}.pickle".format(id), "rb")
+        loaded_object = pickle.load(file_to_read)
+        file_to_read.close()
+        print(loaded_object)
+
+        self.HOST = loaded_object.HOST
+        self.clientip = loaded_object.clientip
+        self.clientPort = loaded_object.clientPort
+        self.mapofNodes = loaded_object.nodeMap
+        self.noOfNodes = loaded_object.noOfNodes
+        self.currentTerm = loaded_object.currentTerm
+        self.votedFor = loaded_object.votedFor,
+        self.log = loaded_object.log
+        print(self.log)
+        print(loaded_object.log)
+        self.id = loaded_object.id
+
+        self._createProxyMap()
+
+        for k, v in self.map.items():
+            if k != self.id:
+                v.printTest()
+
+        # recover commitIndex and lastApplied
+        commitIndex = -1
+        for e in self.log:
+            if e.iscommitted:
+                commitIndex = commitIndex + 1
+        self.commitIndex = commitIndex
+
+        # apply the persistent state to the variables
+
+        # reset the flags
+        self.timeoutFlag = False
+        self.leaderTimeoutFlag = False
+        self.electionTimeoutFlag = False
+
+        self._persist = loaded_object
 
 
 class State(Enum):
@@ -899,6 +988,43 @@ class Vote:
         self.mutex.release()
 
 
+class Persist:
+    def __init__(self):
+        self.SERVER_PORT = 65431
+        self.nodeMap = None
+        self.noOfNodes = None
+        self.currentTerm = None
+        self.votedFor = None
+        self.log = None
+        self.id = 0
+
+    def updateNetworkInfo(self, host, clientip, clientport):
+        self.HOST = host
+        self.clientip = clientip  # needs to be persisted
+        self.clientPort = clientport  # needs to be persisted
+
+    def updateNodeInfo(self, id, nodeMap, noofnodes):
+        self.id = id
+        self.nodeMap = nodeMap  # Map about the other nodes
+        self.noOfNodes = noofnodes
+
+    def updateCurrentInfo(self, term, votedfor, log):
+        self.currentTerm = term
+        self.votedFor = votedfor
+        self.log = log
+
+    def __str__(self):
+        return "HOST: {0} NodeID:{8} clientip:{1}  clientPort:{2}  nodeMap:{3}  noOfNodes:{4}  currentTerm:{5} votedFor:{6}\n log:{7}".format(
+            self.HOST, self.clientip, self.clientPort, self.nodeMap, self.noOfNodes, self.currentTerm, self.votedFor,
+            self.log, self.id)
+
+
+def _persist(obj):
+    file = open("persist/data{0}.pickle".format(obj.id), "wb")
+    pickle.dump(obj, file)
+    file.close()
+
+
 if __name__ == "__main__":
     raft = Raft(1)
-    raft.main()
+    raft._main()

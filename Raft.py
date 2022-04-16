@@ -132,6 +132,8 @@ class Raft:
                     self.log.append(e)
                     self.commitIndex = leadercommitIndex
                     self.updateCommittedEntries()
+            self._persist.updateCurrentInfo(self.currentTerm, self.votedFor, self.log)
+            _persist(self._persist)
         self.mutexForAppendEntry.release()
         # print("Mutex for appendEntry is released in node {0}".format(self.id))
         logging.debug("Mutex for appendEntry is released in node {0}".format(self.id))
@@ -176,10 +178,16 @@ class Raft:
                     "Node {0} 's current Term is before update is {1} state {2}".format(self.id, self.currentTerm,
                                                                                         self.state))
                 self.currentTerm = info['term']
+                leaderPrevLogIndex = info['previouslogindex']
+                if leaderPrevLogIndex > len(self.log):
+                    print("Heartbeat was OK but node {0} is far behind the leader returning False")
+                    return False
                 self.commitIndex = info['leadercommit']
                 self.updateCommittedEntries()
                 print("Node {0} 's current Term is updated to {1} state {2}".format(self.id, self.currentTerm,
                                                                                     self.state))
+                self._persist.updateCurrentInfo(self.currentTerm, self.votedFor, self.log)
+                _persist(self._persist)
                 return True
         else:
             print("AppendEntry from {0} to node {1} leader's Term {2} is not a HB".format(info['leaderid'], self.id,
@@ -266,11 +274,15 @@ class Raft:
                         return False
                     else:
                         self.votedFor = candidateid
+                        self._persist.updateCurrentInfo(self.currentTerm, self.votedFor, self.log)
+                        _persist(self._persist)
                         self.mutexForAppendEntry.release()
                         # print('Releasing mutex for request vote in node {0}'.format(self.id))
                         return True
-                else:
+                else: # candidates last log term is greater than the nodes last term therefore candidate is more updated
                     self.votedFor = candidateid
+                    self._persist.updateCurrentInfo(self.currentTerm, self.votedFor, self.log)
+                    _persist(self._persist)
                     self.mutexForAppendEntry.release()
                     # print('Releasing mutex for request vote in node {0}'.format(self.id))
                     return True
@@ -510,6 +522,7 @@ class Raft:
                     logging.debug("Leaders volatile state has not been updated retrying")
                     continue
                 print("Current Commit Index {0}".format(self.commitIndex))
+                print("TempCommitIndex {0}".format(temp))
                 logging.debug("Current Commit Index {0}".format(self.commitIndex))
                 # temp = self.commitIndex + 1
                 count = 0
@@ -526,6 +539,8 @@ class Raft:
                         print("matchedIndexInCommitThread" + str(self.matchIndex))
                         if temp <= self.matchIndex[i - 1]:
                             count = count + 1
+                print("Count: {0}".format(count))
+                print('Simple Majority: {0}'.format(self.getSimpleMajority()))
                 if count >= self.getSimpleMajority():
                     if self.log[temp].term == self.currentTerm:
                         print("Next commit index is {0}".format(temp))
@@ -542,6 +557,7 @@ class Raft:
                             "Entry ID:{0} is replicated in majority but was not appended by current term {1} and "
                             "leader {1}".format(
                                 temp, self.currentTerm, self.id))
+                        temp += 1
                 sleep(3)
                 print("Waked up")
                 # temp += 1
@@ -554,6 +570,7 @@ class Raft:
             # add the entry to the log
             entry = Entry(0, self.currentTerm)  # id is not the correct one so we update it in the next two lines
             entry.value = value
+            entry.owner = self.id
             self.log.append(entry)
             entry.id = len(self.log) - 1
             print("Entry ID: {0}".format(entry.id))
@@ -649,12 +666,14 @@ class Raft:
         except TypeError as e:
             print(TypeError, e)
             quit(0)
+        except Exception as e:
+            print("Exception Occurred {0}".format(e))
 
     def printLog(self):
         print("Printing the log of node {0}".format(self.id))
         logging.debug("Printing the log of node {0}".format(self.id))
         for e in self.log:
-            print(e, end='')
+            print(e)
             logging.debug(e)
         print("")
         logging.debug("")
@@ -884,7 +903,7 @@ class Raft:
         print("Current Term : {0}".format(self.currentTerm))
         print("MatchIndex: {0}".format(self.matchIndex))
         print("NextIndex: {0}".format(self.nextIndex))
-        print("ServerIP: {0}")
+        print('Simple Majority: {0}'.format(self.getSimpleMajority()))
 
     def updateCommittedEntries(self):
         temp = self.commitIndex
@@ -969,9 +988,10 @@ class Entry:
         self.id = id
         self.term = term
         self.iscommitted = False
+        self.owner = None
 
     def __str__(self):
-        return "id:{0} term:{1} val:{2} isCommitted: {3}\t".format(self.id, self.term, self.value, self.iscommitted)
+        return "id:{0} term:{1} val:{2} isCommitted: {3} AddedBy: {4}\t".format(self.id, self.term, self.value, self.iscommitted, self.owner)
 
 
 class Vote:
@@ -1020,9 +1040,12 @@ class Persist:
 
 
 def _persist(obj):
-    file = open("persist/data{0}.pickle".format(obj.id), "wb")
-    pickle.dump(obj, file)
-    file.close()
+    try:
+        file = open("persist/data{0}.pickle".format(obj.id), "wb")
+        pickle.dump(obj, file)
+        file.close()
+    except Exception as e:
+        print("Exception Occurred while accessing persistent storage {0}".format(e))
 
 
 if __name__ == "__main__":

@@ -279,7 +279,7 @@ class Raft:
                         self.mutexForAppendEntry.release()
                         # print('Releasing mutex for request vote in node {0}'.format(self.id))
                         return True
-                else: # candidates last log term is greater than the nodes last term therefore candidate is more updated
+                else:  # candidates last log term is greater than the nodes last term therefore candidate is more updated
                     self.votedFor = candidateid
                     self._persist.updateCurrentInfo(self.currentTerm, self.votedFor, self.log)
                     _persist(self._persist)
@@ -531,7 +531,8 @@ class Raft:
                 else:
                     print("Next index does not exist in the log next index {0}, length of log {1}".format(temp,
                                                                                                           len(self.log)))
-                    logging.debug("Next index does not exist in the log next index {0}, length of log {1}".format(temp, len(self.log)))
+                    logging.debug("Next index does not exist in the log next index {0}, length of log {1}".format(temp,
+                                                                                                                  len(self.log)))
                     sleep(3)
                     continue
                 for i in range(self.noOfNodes):
@@ -870,7 +871,14 @@ class Raft:
     def menu(self, d):
         self.createTimeoutThread()
         while True:
-            print("Display Raft DashBoard\t[d]")
+            print("Display Raft DashBoard\t")
+            print("Press d for Diagnostics\t")
+            print("Press t for timeout manually\t")
+            print("Press f for fail the process\t")
+            print("Press r to print the log\t")
+            print("Press e to exit the program\t")
+            print("Press a to manually add an entry\t")
+            print("Press any key to get the menu\t")
             resp = input("Choice: ").lower().split()
             if not resp:
                 continue
@@ -884,7 +892,7 @@ class Raft:
                 x = input("What do you want to add?")
                 self.addRequest(x)
             elif resp[0] == 'f':
-                self._fail = True
+                exit(0)
             elif resp[0] == 't':
                 self.timeoutFlag = True
                 self.receivedHeartBeat = False
@@ -991,7 +999,8 @@ class Entry:
         self.owner = None
 
     def __str__(self):
-        return "id:{0} term:{1} val:{2} isCommitted: {3} AddedBy: {4}\t".format(self.id, self.term, self.value, self.iscommitted, self.owner)
+        return "id:{0} term:{1} val:{2} isCommitted: {3} AddedBy: {4}\t".format(self.id, self.term, self.value,
+                                                                                self.iscommitted, self.owner)
 
 
 class Vote:

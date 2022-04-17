@@ -7,6 +7,7 @@ import os
 import gui
 import logging
 import threading
+import gui
 from xmlrpc.client import ServerProxy
 from xmlrpc.server import SimpleXMLRPCServer
 
@@ -147,7 +148,8 @@ class RockEm:
             print("Enter your choice:")
             print("Red Rocker\t[1]")
             print("Blue Bomber\t[2]")
-            resp = input("Choice: ")
+            # resp = input("Choice: ")
+            resp = gui.player_choice()
             ans = self.map[self.leader_id].setPlayer(self.id, resp)
             if ans == 1:
                 print("Player chosen")

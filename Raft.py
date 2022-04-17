@@ -62,6 +62,26 @@ class Raft:
 
         self._persist = None
 
+        self.blue = None
+        self.red = None
+
+        self.bstate = 0
+        self.baction = 0
+        self.bgotblocked = False
+        self.blastpunchtime = 0
+
+        self.rstate = 0
+        self.raction = 0
+        self.rgotblocked = False
+        self.rlastpunchtime = 0
+
+        self.normal_state = 0
+        self.block_with_left_state = 1
+        self.block_with_right_state = 2
+        self.punch_with_left_action = 3
+        self.punch_with_right_action = 4
+        self.won = 5
+
     # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the heartbeat for leader
     # We can create a daemon that issues appendEntries to all the nodes if they are the leader
@@ -893,6 +913,17 @@ class Raft:
                 self.addRequest(x)
             elif resp[0] == 'f':
                 exit(0)
+            elif resp[0] == 'g':
+                print("BLUE: {0}".format(self.blue))
+                print("RED: {0}".format(self.red))
+                print("Bstate {0}".format(self.bstate))
+                print("baction:{0}".format(self.baction))
+                print("bgotblocked:{0}".format(self.bgotblocked))
+                print("blastpunchtime:{0}".format(self.blastpunchtime))
+                print("Rstate:{0}".format(self.rstate))
+                print("Raction:{0}".format(self.raction))
+                print("rgotblocked:{0}".format(self.rgotblocked))
+                print("rlastpunchtime:{0}".format(self.rlastpunchtime))
             elif resp[0] == 't':
                 self.timeoutFlag = True
                 self.receivedHeartBeat = False
@@ -982,6 +1013,207 @@ class Raft:
         self.electionTimeoutFlag = False
 
         self._persist = loaded_object
+
+    def punch(self, color, action):
+        # update entries
+        li = [True, False]
+        success = random.choices(li, weights=(20, 80), k=1)
+        punchtime = time.perf_counter()
+        info = {}
+        info['player'] = color
+        info['action'] = action
+        info['time'] = punchtime
+        info['success'] = success
+
+        self.addRequest(info)
+
+    def blcok(self, color, block):
+        blocktime = time.perf_counter()
+        info = {}
+        info['player'] = color
+        info['time'] = blocktime
+        info['success'] = None
+        info['action'] = block
+
+    def registerPlayer(self):
+        # register player, gives a unique ID
+        if self.state is State.LEADER:
+            if self.blue is not None and self.red is not None:
+                return False, None
+            elif self.blue is None:
+                self.addRequest({"1": "b"})
+                self.blue = True
+                self.bstate = 0
+                self.baction = 0
+                return True, "b"
+            elif self.red is None:
+                self.addRequest({"2": "r"})
+                self.red = True
+                self.rstate = 0
+                self.raction = 0
+                return True, "r"
+        else:
+            print("Node {0} is not the leader. Cannot register the player".format(self.id))
+            logging.debug("Node {0} is not the leader. Cannot register the player".format(self.id))
+            return False
+
+    def getGameState(self):
+        # return the state of the players using a dict
+        # ex: {'r': 1, 'b': 2}
+        copy = self.log.copy()
+        if self.commitIndex == -1:
+            return None
+        for i in range(len(copy)):
+            val = self.log[i].value
+            # print("val{0}".format(val))
+            if "1" in val:
+                self.blue = True
+            if "2" in val:
+                self.red = True
+            print(val['action'] if 'action' in val else "no action")
+            if "player" in val:
+                if val['action'] == 1 or val['action'] == 2:
+                    if val['player'] == 'b':
+                        self.bstate = val['action']
+                    elif val['player'] == 'r':
+                        self.rstate = val['action']
+                if val['action'] == 3 or val['action'] == 4:
+                    if val['player'] == 'b':
+                        punchtime = val['time']
+                        print("punchtime{0}".format(punchtime))
+                        print("vlastpunch{0}".format(self.blastpunchtime))
+                        if val['action'] == 3:
+                            if self.bgotblocked:
+                                if (punchtime - self.blastpunchtime) > 3:
+                                    self.bgotblocked = False
+                                    self.blastpunchtime = punchtime
+                                    if self.rstate == 2:
+                                        self.bgotblocked = True
+                                    else:
+                                        if val['success'] == 1:
+                                            self.bstate = 5
+                                            self.rstate = 6
+                                            return {"b": self.bstate, "r": self.rstate}
+                                        else:
+                                            self.bstate = val['action']
+                                else:
+                                    print("Too early. Nothing to update")
+                            else:  # b was not blocked before
+                                if punchtime - self.blastpunchtime > 1:
+                                    self.bgotblocked = False
+                                    self.blastpunchtime = punchtime
+                                    if self.rstate == 2:
+                                        self.bgotblocked = True
+                                    else:
+                                        if val['success'] == 1:
+                                            self.bstate = 5
+                                            self.rstate = 6
+                                            return {"b": self.bstate, "r": self.rstate}
+                                        else:
+                                            self.bstate = val['action']
+                                else:
+                                    print("Too early. Nothing to update")
+                        if val['action'] == 4:
+                            if self.bgotblocked:
+                                if (punchtime - self.blastpunchtime) > 3:
+                                    self.bgotblocked = False
+                                    self.blastpunchtime = punchtime
+                                    if self.rstate == 1:
+                                        self.bgotblocked = True
+                                    else:
+                                        if val['success'] == 1:
+                                            self.bstate = 5
+                                            self.rstate = 6
+                                            return {"b": self.bstate, "r": self.rstate}
+                                        else:
+                                            self.bstate = val['action']
+                                else:
+                                    print("Too early. Nothing to update")
+                            else:  # b was not blocked before
+                                if punchtime - self.blastpunchtime > 1:
+                                    self.bgotblocked = False
+                                    self.blastpunchtime = punchtime
+                                    if self.rstate == 1:
+                                        self.bgotblocked = True
+                                    else:
+                                        if val['success'] == 1:
+                                            self.bstate = 5
+                                            self.rstate = 6
+                                            return {"b": self.bstate, "r": self.rstate}
+                                        else:
+                                            self.bstate = val['action']
+                                else:
+                                    print("Too early. Nothing to update")
+
+                    if val['player'] == 'r':
+                        punchtime = val['time']
+                        if val['action'] == 3:
+                            if self.rgotblocked:
+                                if (punchtime - self.rlastpunchtime) > 3:
+                                    self.rgotblocked = False
+                                    self.rlastpunchtime = punchtime
+                                    if self.bstate == 2:
+                                        self.rgotblocked = True
+                                    else:
+                                        if val['success'] == 1:
+                                            self.rstate = 5
+                                            self.bstate = 6
+                                            return {"b": self.bstate, "r": self.rstate}
+                                        else:
+                                            self.rstate = val['action']
+                                else:
+                                    print("Too early. Nothing to update")
+                            else:  # b was not blocked before
+                                if punchtime - self.rlastpunchtime > 1:
+                                    self.rgotblocked = False
+                                    self.rlastpunchtime = punchtime
+                                    if self.bstate == 2:
+                                        self.rgotblocked = True
+                                    else:
+                                        if val['success'] == 1:
+                                            self.rstate = 5
+                                            self.bstate = 6
+                                            return {"b": self.bstate, "r": self.rstate}
+                                        else:
+                                            self.rstate = val['action']
+                                else:
+                                    print("Too early. Nothing to update")
+                        if val['action'] == 4:
+                            if self.rgotblocked:
+                                if (punchtime - self.rlastpunchtime) > 3:
+                                    self.rgotblocked = False
+                                    self.rlastpunchtime = punchtime
+                                    if self.bstate == 1:
+                                        self.rgotblocked = True
+                                    else:
+                                        if val['success'] == 1:
+                                            self.rstate = 5
+                                            self.bstate = 6
+                                            return {"b": self.bstate, "r": self.rstate}
+                                        else:
+                                            self.rstate = val['action']
+                                else:
+                                    print("Too early. Nothing to update")
+                            else:  # b was not blocked before
+                                if punchtime - self.rlastpunchtime > 1:
+                                    self.rgotblocked = False
+                                    self.rlastpunchtime = punchtime
+                                    if self.bstate == 1:
+                                        self.rgotblocked = True
+                                    else:
+                                        if val['success'] == 1:
+                                            self.rstate = 5
+                                            self.bstate = 6
+                                            return {"b": self.bstate, "r": self.rstate}
+                                        else:
+                                            self.rstate = val['action']
+                                else:
+                                    print("Too early. Nothing to update")
+        return {"b": self.bstate, "r": self.rstate}
+
+    def isReadyForGameState(self):
+        if self.blue is not None and self.red is not None:
+            return True
 
 
 class State(Enum):

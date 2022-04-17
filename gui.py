@@ -228,8 +228,9 @@ class GUI:
             ans = self.map[self.leader_id].playerMove(self.id, event.lower())
             if ans == 1:
                 window['Graph'].delete_figure(self.opp_char)
-                self.my_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.opp_colour+"_defend_"+direction+".png"), location=(-60, 500))
-                text_elem.update(value="Punch Blocked!")
+                self.opp_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.opp_colour+"_defend_"+direction+".png"), location=(-60, 500))
+                text_elem.update(value="Punch Blocked! Cannot punch for 3 seconds")
+                time.sleep(3)
             elif ans == 2:
                 text_elem.update(value="Punch Dodged!")
             elif ans > 100:
@@ -237,7 +238,9 @@ class GUI:
                     self.map[ans].gameOver()
                 except Exception:
                     pass
-                self.gameOver(True)
+                self.gameOver(True)            
+            elif event == sg.WIN_CLOSED:
+                window.close()
         # window.close()
 
     def gameChoice(self, window, dir):
@@ -251,6 +254,7 @@ class GUI:
                 self.opp_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.opp_colour+"_default.png"), location=(-60, 500))
                 direction  = "right"            
                 text_elem.update(value="Left Punch!")
+                print("Left Punch!")
                 break
             elif event == "W":
                 window['Graph'].delete_figure(self.my_char)
@@ -259,6 +263,7 @@ class GUI:
                 self.opp_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.opp_colour+"_default.png"), location=(-60, 500)) 
                 direction  = "left"                
                 text_elem.update(value="Right Punch!")
+                print("Right Punch!")
                 break
             elif event == "A":
                 window['Graph'].delete_figure(self.my_char)
@@ -266,7 +271,8 @@ class GUI:
                 window['Graph'].delete_figure(self.opp_char)
                 self.opp_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.opp_colour+"_default.png"), location=(-60, 500))
                 text_elem.update(value="Left Block!")
-                direction  = "right"  
+                direction  = "right"
+                print("Left Block!")
                 break
             elif event == "S":
                 window['Graph'].delete_figure(self.my_char)
@@ -274,16 +280,19 @@ class GUI:
                 window['Graph'].delete_figure(self.opp_char)
                 self.opp_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.opp_colour+"_default.png"), location=(-60, 500))
                 text_elem.update(value="Right Block!")
-                direction  = "left"  
+                direction  = "left"
+                print("Right Block!") 
                 break
+            elif event == sg.WIN_CLOSED:
+                window.close()
         return text_elem, event, direction
 
     def gameOver(self, win=False):
         if win:
-            str = "Hit landed! You win!"
+            str = "Hit landed! "+self.colour+" wins!"
         else:
-            str = "You got Hit! Game Over!"
-        popup_layout = [  [sg.Text(str, font= ("Arial", 40))],[sg.Button('Click to end')]]
+            str = self.colour+" got Hit! Game Over!"
+        popup_layout = [[sg.Text(str, font= ("Arial", 40))],[sg.Button('Click to end')]]
         window = sg.Window('Game Over!', popup_layout, margins=(200, 200), use_default_focus=False, finalize=True, modal=True, element_justification='c')
 
         while True:

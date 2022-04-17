@@ -84,6 +84,8 @@ class Raft:
         self.punch_with_right_action = 4
         self.won = 5
 
+        self.gameMessage = ""
+
     # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the heartbeat for leader
     # We can create a daemon that issues appendEntries to all the nodes if they are the leader
@@ -1065,7 +1067,10 @@ class Raft:
         # Use the mutex
         copy = self.log.copy()
         if self.commitIndex == -1:
-            return None
+            self.gameMessage = "Game hasn't started"
+            return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
+        if self.bstate == 5 or self.bstate == 6:
+            return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
         for i in range(len(copy)):
             val = self.log[i].value
             print("val{0}".format(val))
@@ -1093,14 +1098,18 @@ class Raft:
                                     self.blastpunchtime = punchtime
                                     if self.rstate == 2:
                                         self.bgotblocked = True
+                                        self.gameMessage = "Blues Left punch got blocked"
                                     else:
                                         if val['success']:
                                             self.bstate = 5
                                             self.rstate = 6
-                                            return {"b": self.bstate, "r": self.rstate}
+                                            self.gameMessage = "Game Over. B's punch landed. B won!"
+                                            return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
+                                            self.gameMessage = "B's punch missed!"
                                             self.bstate = val['action']
                                 else:
+                                    self.gameMessage = "B cannot punch, B got blocked earlier"
                                     print("Too early. Nothing to update")
                             else:  # b was not blocked before
                                 if punchtime - self.blastpunchtime > 1:
@@ -1108,14 +1117,18 @@ class Raft:
                                     self.blastpunchtime = punchtime
                                     if self.rstate == 2:
                                         self.bgotblocked = True
+                                        self.gameMessage = "Blues left punch got blocked"
                                     else:
                                         if val['success']:
                                             self.bstate = 5
                                             self.rstate = 6
-                                            return {"b": self.bstate, "r": self.rstate}
+                                            self.gameMessage = "Blues punch landed. Blue win!"
+                                            return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
+                                            self.gameMessage = "B's punch missed"
                                             self.bstate = val['action']
                                 else:
+                                    self.gameMessage = "B cannot punch, B has to wait at least one second to punch"
                                     print("Too early. Nothing to update")
                         if val['action'] == 4:
                             if self.bgotblocked:
@@ -1124,14 +1137,18 @@ class Raft:
                                     self.blastpunchtime = punchtime
                                     if self.rstate == 1:
                                         self.bgotblocked = True
+                                        self.gameMessage = "B's Right punch got blocked"
                                     else:
                                         if val['success']:
                                             self.bstate = 5
                                             self.rstate = 6
-                                            return {"b": self.bstate, "r": self.rstate}
+                                            self.gameMessage = "B's right punch landed. B Win!"
+                                            return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
+                                            self.gameMessage = "B's right punch missed"
                                             self.bstate = val['action']
                                 else:
+                                    self.gameMessage = "B cannot punch, B got blocked earlier"
                                     print("Too early. Nothing to update")
                             else:  # b was not blocked before
                                 if punchtime - self.blastpunchtime > 1:
@@ -1139,14 +1156,18 @@ class Raft:
                                     self.blastpunchtime = punchtime
                                     if self.rstate == 1:
                                         self.bgotblocked = True
+                                        self.gameMessage = "B's right punch got blocked"
                                     else:
                                         if val['success']:
                                             self.bstate = 5
                                             self.rstate = 6
-                                            return {"b": self.bstate, "r": self.rstate}
+                                            self.gameMessage = "B's right punch landed. B won!"
+                                            return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
+                                            self.gameMessage = "B's right punch missed"
                                             self.bstate = val['action']
                                 else:
+                                    self.gameMessage = "B cannot punch, B has to wait at least one second after previous punch"
                                     print("Too early. Nothing to update")
 
                     if val['player'] == 'r':
@@ -1158,14 +1179,18 @@ class Raft:
                                     self.rlastpunchtime = punchtime
                                     if self.bstate == 2:
                                         self.rgotblocked = True
+                                        self.gameMessage = "R's left punch got blocked"
                                     else:
                                         if val['success']:
                                             self.rstate = 5
                                             self.bstate = 6
-                                            return {"b": self.bstate, "r": self.rstate}
+                                            self.gameMessage = "R's left punch landed. R won!"
+                                            return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
+                                            self.gameMessage = "R's left punch missed"
                                             self.rstate = val['action']
                                 else:
+                                    self.gameMessage = "R cannot punch, R got blocked earlier"
                                     print("Too early. Nothing to update")
                             else:  # b was not blocked before
                                 if punchtime - self.rlastpunchtime > 1:
@@ -1173,14 +1198,18 @@ class Raft:
                                     self.rlastpunchtime = punchtime
                                     if self.bstate == 2:
                                         self.rgotblocked = True
+                                        self.gameMessage = "R's left punch got blocked"
                                     else:
                                         if val['success']:
                                             self.rstate = 5
                                             self.bstate = 6
-                                            return {"b": self.bstate, "r": self.rstate}
+                                            self.gameMessage = "R's left punch landed. R won!"
+                                            return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
+                                            self.gameMessage = "R's left punch missed"
                                             self.rstate = val['action']
                                 else:
+                                    self.gameMessage = "R's cannot punch, R' has to wait at least one second"
                                     print("Too early. Nothing to update")
                         if val['action'] == 4:
                             if self.rgotblocked:
@@ -1188,15 +1217,19 @@ class Raft:
                                     self.rgotblocked = False
                                     self.rlastpunchtime = punchtime
                                     if self.bstate == 1:
+                                        self.gameMessage = "R's right punch got blocked!"
                                         self.rgotblocked = True
                                     else:
                                         if val['success']:
                                             self.rstate = 5
                                             self.bstate = 6
-                                            return {"b": self.bstate, "r": self.rstate}
+                                            self.gameMessage = "R's right punch landed. R won!"
+                                            return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
+                                            self.gameMessage = "R's right punch missed"
                                             self.rstate = val['action']
                                 else:
+                                    self.gameMessage = "R cannot punch, R got blocked earlier"
                                     print("Too early. Nothing to update")
                             else:  # b was not blocked before
                                 if punchtime - self.rlastpunchtime > 1:
@@ -1204,17 +1237,21 @@ class Raft:
                                     self.rlastpunchtime = punchtime
                                     if self.bstate == 1:
                                         self.rgotblocked = True
+                                        self.gameMessage = "R's right punch got blocked"
                                     else:
                                         if val['success']:
                                             self.rstate = 5
                                             self.bstate = 6
-                                            return {"b": self.bstate, "r": self.rstate}
+                                            self.gameMessage = "R's right punch landed!. R won!"
+                                            return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
+                                            self.gameMessage = "R's right punch missed!"
                                             self.rstate = val['action']
                                 else:
+                                    self.gameMessage = "R cannot punch now. wait one second!"
                                     print("Too early. Nothing to update")
 
-        return {"b": self.bstate, "r": self.rstate}
+        return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
 
     def isReadyForGameState(self):
         if self.blue is not None and self.red is not None:

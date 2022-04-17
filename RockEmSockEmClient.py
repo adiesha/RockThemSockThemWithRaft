@@ -116,7 +116,7 @@ class RockEm:
                     print(self.color)
                 elif resp[0] == 'p':
                     color = {"b": 0, "r": 1}
-                    punch = int(input("which punch"))
+                    punch = int(input("which punch:? "))
                     leaderID = self.getLeader()
                     c = color[self.color]
                     print(c)

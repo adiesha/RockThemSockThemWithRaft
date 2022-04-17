@@ -65,6 +65,8 @@ class Raft:
         self.blue = None
         self.red = None
 
+        self.gameMutex = threading.Lock()
+
         self.bstate = 0
         self.baction = 0
         self.bgotblocked = False
@@ -1017,7 +1019,7 @@ class Raft:
     def punch(self, color, action):
         # update entries
         li = [True, False]
-        success = random.choices(li, weights=(20, 80), k=1)
+        success = (random.choices(li, weights=(20, 80), k=1))[0]
         punchtime = time.perf_counter()
         info = {}
         info['player'] = color
@@ -1055,22 +1057,24 @@ class Raft:
         else:
             print("Node {0} is not the leader. Cannot register the player".format(self.id))
             logging.debug("Node {0} is not the leader. Cannot register the player".format(self.id))
-            return False
+            return False, None
 
     def getGameState(self):
         # return the state of the players using a dict
         # ex: {'r': 1, 'b': 2}
+        # Use the mutex
         copy = self.log.copy()
         if self.commitIndex == -1:
             return None
         for i in range(len(copy)):
             val = self.log[i].value
-            # print("val{0}".format(val))
+            print("val{0}".format(val))
             if "1" in val:
                 self.blue = True
             if "2" in val:
                 self.red = True
-            print(val['action'] if 'action' in val else "no action")
+            if 'action' in val:
+                print(val['action'])
             if "player" in val:
                 if val['action'] == 1 or val['action'] == 2:
                     if val['player'] == 'b':
@@ -1090,7 +1094,7 @@ class Raft:
                                     if self.rstate == 2:
                                         self.bgotblocked = True
                                     else:
-                                        if val['success'] == 1:
+                                        if val['success']:
                                             self.bstate = 5
                                             self.rstate = 6
                                             return {"b": self.bstate, "r": self.rstate}
@@ -1105,7 +1109,7 @@ class Raft:
                                     if self.rstate == 2:
                                         self.bgotblocked = True
                                     else:
-                                        if val['success'] == 1:
+                                        if val['success']:
                                             self.bstate = 5
                                             self.rstate = 6
                                             return {"b": self.bstate, "r": self.rstate}
@@ -1121,7 +1125,7 @@ class Raft:
                                     if self.rstate == 1:
                                         self.bgotblocked = True
                                     else:
-                                        if val['success'] == 1:
+                                        if val['success']:
                                             self.bstate = 5
                                             self.rstate = 6
                                             return {"b": self.bstate, "r": self.rstate}
@@ -1136,7 +1140,7 @@ class Raft:
                                     if self.rstate == 1:
                                         self.bgotblocked = True
                                     else:
-                                        if val['success'] == 1:
+                                        if val['success']:
                                             self.bstate = 5
                                             self.rstate = 6
                                             return {"b": self.bstate, "r": self.rstate}
@@ -1155,7 +1159,7 @@ class Raft:
                                     if self.bstate == 2:
                                         self.rgotblocked = True
                                     else:
-                                        if val['success'] == 1:
+                                        if val['success']:
                                             self.rstate = 5
                                             self.bstate = 6
                                             return {"b": self.bstate, "r": self.rstate}
@@ -1170,7 +1174,7 @@ class Raft:
                                     if self.bstate == 2:
                                         self.rgotblocked = True
                                     else:
-                                        if val['success'] == 1:
+                                        if val['success']:
                                             self.rstate = 5
                                             self.bstate = 6
                                             return {"b": self.bstate, "r": self.rstate}
@@ -1186,7 +1190,7 @@ class Raft:
                                     if self.bstate == 1:
                                         self.rgotblocked = True
                                     else:
-                                        if val['success'] == 1:
+                                        if val['success']:
                                             self.rstate = 5
                                             self.bstate = 6
                                             return {"b": self.bstate, "r": self.rstate}
@@ -1201,7 +1205,7 @@ class Raft:
                                     if self.bstate == 1:
                                         self.rgotblocked = True
                                     else:
-                                        if val['success'] == 1:
+                                        if val['success']:
                                             self.rstate = 5
                                             self.bstate = 6
                                             return {"b": self.bstate, "r": self.rstate}
@@ -1209,6 +1213,7 @@ class Raft:
                                             self.rstate = val['action']
                                 else:
                                     print("Too early. Nothing to update")
+
         return {"b": self.bstate, "r": self.rstate}
 
     def isReadyForGameState(self):

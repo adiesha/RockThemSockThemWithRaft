@@ -1065,11 +1065,18 @@ class Raft:
         # return the state of the players using a dict
         # ex: {'r': 1, 'b': 2}
         # Use the mutex
+        self.gameMutex.acquire()
         copy = self.log.copy()
         if self.commitIndex == -1:
             self.gameMessage = "Game hasn't started"
+            self.gameMutex.release()
+            return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
+        if self.bstate == 0 and self.rstate == 0:
+            self.gameMessage = "Players joined. Ready to start"
+            self.gameMutex.release()
             return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
         if self.bstate == 5 or self.bstate == 6:
+            self.gameMutex.release()
             return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
         for i in range(len(copy)):
             val = self.log[i].value
@@ -1095,18 +1102,22 @@ class Raft:
                             if self.bgotblocked:
                                 if (punchtime - self.blastpunchtime) > 3:
                                     self.bgotblocked = False
-                                    self.blastpunchtime = punchtime
+                                    # self.blastpunchtime = punchtime
                                     if self.rstate == 2:
                                         self.bgotblocked = True
                                         self.gameMessage = "Blues Left punch got blocked"
+                                        self.blastpunchtime = punchtime
                                     else:
                                         if val['success']:
                                             self.bstate = 5
                                             self.rstate = 6
                                             self.gameMessage = "Game Over. B's punch landed. B won!"
+                                            self.blastpunchtime = punchtime
+                                            self.gameMutex.release()
                                             return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
                                             self.gameMessage = "B's punch missed!"
+                                            self.blastpunchtime = punchtime
                                             self.bstate = val['action']
                                 else:
                                     self.gameMessage = "B cannot punch, B got blocked earlier"
@@ -1114,18 +1125,22 @@ class Raft:
                             else:  # b was not blocked before
                                 if punchtime - self.blastpunchtime > 1:
                                     self.bgotblocked = False
-                                    self.blastpunchtime = punchtime
+                                    # self.blastpunchtime = punchtime
                                     if self.rstate == 2:
                                         self.bgotblocked = True
                                         self.gameMessage = "Blues left punch got blocked"
+                                        self.blastpunchtime = punchtime
                                     else:
                                         if val['success']:
                                             self.bstate = 5
                                             self.rstate = 6
                                             self.gameMessage = "Blues punch landed. Blue win!"
+                                            self.blastpunchtime = punchtime
+                                            self.gameMutex.release()
                                             return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
                                             self.gameMessage = "B's punch missed"
+                                            self.blastpunchtime = punchtime
                                             self.bstate = val['action']
                                 else:
                                     self.gameMessage = "B cannot punch, B has to wait at least one second to punch"
@@ -1134,38 +1149,46 @@ class Raft:
                             if self.bgotblocked:
                                 if (punchtime - self.blastpunchtime) > 3:
                                     self.bgotblocked = False
-                                    self.blastpunchtime = punchtime
+                                    # self.blastpunchtime = punchtime
                                     if self.rstate == 1:
                                         self.bgotblocked = True
                                         self.gameMessage = "B's Right punch got blocked"
+                                        self.blastpunchtime = punchtime
                                     else:
                                         if val['success']:
                                             self.bstate = 5
                                             self.rstate = 6
                                             self.gameMessage = "B's right punch landed. B Win!"
+                                            self.blastpunchtime = punchtime
+                                            self.gameMutex.release()
                                             return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
                                             self.gameMessage = "B's right punch missed"
                                             self.bstate = val['action']
+                                            self.blastpunchtime = punchtime
                                 else:
                                     self.gameMessage = "B cannot punch, B got blocked earlier"
                                     print("Too early. Nothing to update")
                             else:  # b was not blocked before
                                 if punchtime - self.blastpunchtime > 1:
                                     self.bgotblocked = False
-                                    self.blastpunchtime = punchtime
+                                    # self.blastpunchtime = punchtime
                                     if self.rstate == 1:
                                         self.bgotblocked = True
                                         self.gameMessage = "B's right punch got blocked"
+                                        self.blastpunchtime = punchtime
                                     else:
                                         if val['success']:
                                             self.bstate = 5
                                             self.rstate = 6
                                             self.gameMessage = "B's right punch landed. B won!"
+                                            self.blastpunchtime = punchtime
+                                            self.gameMutex.release()
                                             return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
                                             self.gameMessage = "B's right punch missed"
                                             self.bstate = val['action']
+                                            self.blastpunchtime = punchtime
                                 else:
                                     self.gameMessage = "B cannot punch, B has to wait at least one second after previous punch"
                                     print("Too early. Nothing to update")
@@ -1176,38 +1199,46 @@ class Raft:
                             if self.rgotblocked:
                                 if (punchtime - self.rlastpunchtime) > 3:
                                     self.rgotblocked = False
-                                    self.rlastpunchtime = punchtime
+                                    # self.rlastpunchtime = punchtime
                                     if self.bstate == 2:
                                         self.rgotblocked = True
                                         self.gameMessage = "R's left punch got blocked"
+                                        self.rlastpunchtime = punchtime
                                     else:
                                         if val['success']:
                                             self.rstate = 5
                                             self.bstate = 6
                                             self.gameMessage = "R's left punch landed. R won!"
+                                            self.rlastpunchtime = punchtime
+                                            self.gameMutex.release()
                                             return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
                                             self.gameMessage = "R's left punch missed"
                                             self.rstate = val['action']
+                                            self.rlastpunchtime = punchtime
                                 else:
                                     self.gameMessage = "R cannot punch, R got blocked earlier"
                                     print("Too early. Nothing to update")
                             else:  # b was not blocked before
                                 if punchtime - self.rlastpunchtime > 1:
                                     self.rgotblocked = False
-                                    self.rlastpunchtime = punchtime
+                                    # self.rlastpunchtime = punchtime
                                     if self.bstate == 2:
                                         self.rgotblocked = True
                                         self.gameMessage = "R's left punch got blocked"
+                                        self.rlastpunchtime = punchtime
                                     else:
                                         if val['success']:
                                             self.rstate = 5
                                             self.bstate = 6
                                             self.gameMessage = "R's left punch landed. R won!"
+                                            self.rlastpunchtime = punchtime
+                                            self.gameMutex.release()
                                             return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
                                             self.gameMessage = "R's left punch missed"
                                             self.rstate = val['action']
+                                            self.rlastpunchtime = punchtime
                                 else:
                                     self.gameMessage = "R's cannot punch, R' has to wait at least one second"
                                     print("Too early. Nothing to update")
@@ -1215,42 +1246,50 @@ class Raft:
                             if self.rgotblocked:
                                 if (punchtime - self.rlastpunchtime) > 3:
                                     self.rgotblocked = False
-                                    self.rlastpunchtime = punchtime
+                                    # self.rlastpunchtime = punchtime
                                     if self.bstate == 1:
                                         self.gameMessage = "R's right punch got blocked!"
                                         self.rgotblocked = True
+                                        self.rlastpunchtime = punchtime
                                     else:
                                         if val['success']:
                                             self.rstate = 5
                                             self.bstate = 6
                                             self.gameMessage = "R's right punch landed. R won!"
+                                            self.rlastpunchtime = punchtime
+                                            self.gameMutex.release()
                                             return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
                                             self.gameMessage = "R's right punch missed"
                                             self.rstate = val['action']
+                                            self.rlastpunchtime = punchtime
                                 else:
                                     self.gameMessage = "R cannot punch, R got blocked earlier"
                                     print("Too early. Nothing to update")
                             else:  # b was not blocked before
                                 if punchtime - self.rlastpunchtime > 1:
                                     self.rgotblocked = False
-                                    self.rlastpunchtime = punchtime
+                                    # self.rlastpunchtime = punchtime
                                     if self.bstate == 1:
                                         self.rgotblocked = True
                                         self.gameMessage = "R's right punch got blocked"
+                                        self.rlastpunchtime = punchtime
                                     else:
                                         if val['success']:
                                             self.rstate = 5
                                             self.bstate = 6
                                             self.gameMessage = "R's right punch landed!. R won!"
+                                            self.rlastpunchtime = punchtime
+                                            self.gameMutex.release()
                                             return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
                                         else:
                                             self.gameMessage = "R's right punch missed!"
                                             self.rstate = val['action']
+                                            self.rlastpunchtime = punchtime
                                 else:
                                     self.gameMessage = "R cannot punch now. wait one second!"
                                     print("Too early. Nothing to update")
-
+        self.gameMutex.release()
         return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
 
     def isReadyForGameState(self):

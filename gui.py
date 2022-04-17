@@ -23,6 +23,9 @@ class GUI:
         self.clientip = "127.0.0.1"
         self.clientPort = None
         self.colour = None
+        self.opp_colour = None
+        self.my_char = None
+        self.opp_char = None
 
     def createJSONReq(self, typeReq, nodes=None, slot=None):
         # Get map data
@@ -155,10 +158,12 @@ class GUI:
         flag = None
         error = False
         while ans != 1:
-            ans, flag = self.choice(window)
+            ans, flag, opp = self.choice(window)
             if ans == 1:
                 if error:
                     window['Graph'].delete_figure(error)
+                self.colour = flag
+                self.opp_colour = opp
                 window['Graph'].draw_text(text = "Player Chosen : "+flag+ ". Loading game!", location=(400, 50), color = "white", text_location = "center", font= ("Arial", 20))
                 window.refresh()
                 time.sleep(10)
@@ -179,12 +184,14 @@ class GUI:
             if event == 'Red Rocker' :
                 ans = self.map[self.leader_id].setPlayer(self.id, "1")
                 flag = "red"
+                opp = "blue"
                 break
             if event == 'Blue Bomber' :
                 ans = self.map[self.leader_id].setPlayer(self.id, "2")
                 flag = "blue"
+                opp = "red"
                 break
-        return ans, flag
+        return ans, flag, opp
 
     def game(self):
         dir = os.path.dirname(__file__)
@@ -193,32 +200,101 @@ class GUI:
         sg.theme('DarkAmber')
         layout = [[sg.Text('FIGHT!', font=("Arial", 20), justification='center')],
             [(sg.Graph((800, 500), (0, 0), (800, 500), key='Graph', background_color="black"))],
-            [sg.Button('Red Rocker', button_color=("white", "firebrick"), font= ("Arial", 20)), 
-            sg.Button('Blue Bomber', button_color=("white", "royal blue"), font= ("Arial", 20))] ]
+            [sg.Text(font=("Arial", 20), justification='center', key='text')],
+            [sg.Button('Q', button_color=("white", "firebrick"), font= ("Arial", 20)), 
+            sg.Button('W', button_color=("white", "firebrick"), font= ("Arial", 20))],
+            [sg.Button('A', button_color=("white", "firebrick"), font= ("Arial", 20)), 
+            sg.Button('S', button_color=("white", "firebrick"), font= ("Arial", 20))]]
 
-        window = sg.Window('Rock ‘Em Sock ‘Em Robots', layout, use_default_focus=False, finalize=True, element_justification='c')
-        window['Graph'].draw_text(text = "Controls", location=(400, 475), color = "white", text_location = "center", font= ("Arial", 20))
+        window = sg.Window('Rock ‘Em Sock ‘Em Robots', layout, use_default_focus=False, finalize=True, element_justification='c', return_keyboard_events=True,)
+        window['Graph'].draw_text(text = "Controls for "+self.colour, location=(400, 475), color = "white", text_location = "center", font= ("Arial", 20))
         window['Graph'].draw_text(text = "Q : Punch Left      W : Punch Right", location=(415, 450), color = "white", text_location = "center")
         window['Graph'].draw_text(text = "A : Block Left      S : Block Right", location=(415, 425), color = "white", text_location = "center")
         window['Graph'].draw_image(filename=os.path.join(dir, "assets/ring.png"), location=(25, 400))
         red_id = window['Graph'].draw_image(filename=os.path.join(dir, "assets/red_default.png"), location=(-60, 500))
         blue_id = window['Graph'].draw_image(filename=os.path.join(dir, "assets/blue_default.png"), location=(-60, 500))
 
+        print ("Self Colour: "+self.colour)
+        if self.colour == "red":
+            self.my_char == red_id
+            self.opp_char == blue_id
+        elif self.colour == "blue":
+            self.my_char == red_id
+            self.opp_char == blue_id
 
+        direction = None
+        while True:
+            text_elem, event, direction = self.gameChoice(window, dir)                
+            ans = self.map[self.leader_id].playerMove(self.id, event.lower())
+            if ans == 1:
+                window['Graph'].delete_figure(self.opp_char)
+                self.my_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.opp_colour+"_defend_"+direction+".png"), location=(-60, 500))
+                text_elem.update(value="Punch Blocked!")
+            elif ans == 2:
+                text_elem.update(value="Punch Dodged!")
+            elif ans > 100:
+                try:
+                    self.map[ans].gameOver()
+                except Exception:
+                    pass
+                self.gameOver(True)
+        # window.close()
+
+    def gameChoice(self, window, dir):
         while True:
             event, values = window.read()
-            if event == sg.WIN_CLOSED : 
+            text_elem = window['text']
+            if event == "Q":                
+                window['Graph'].delete_figure(self.my_char)
+                self.my_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.colour+"_attack_left.png"), location=(-60, 500))
+                window['Graph'].delete_figure(self.opp_char)
+                self.opp_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.opp_colour+"_default.png"), location=(-60, 500))
+                direction  = "right"            
+                text_elem.update(value="Left Punch!")
                 break
-            if event == 'Red Rocker' :
-                window['Graph'].delete_figure(red_id)
-                red_id = window['Graph'].draw_image(filename=os.path.join(dir, "assets/red_attack_left.png"), location=(-60, 500))
-            if event == 'Blue Bomber' :
-                window['Graph'].delete_figure(blue_id) 
+            elif event == "W":
+                window['Graph'].delete_figure(self.my_char)
+                self.my_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.colour+"_attack_right.png"), location=(-60, 500))
+                window['Graph'].delete_figure(self.opp_char)
+                self.opp_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.opp_colour+"_default.png"), location=(-60, 500)) 
+                direction  = "left"                
+                text_elem.update(value="Right Punch!")
+                break
+            elif event == "A":
+                window['Graph'].delete_figure(self.my_char)
+                self.my_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.colour+"_defend_left.png"), location=(-60, 500))
+                window['Graph'].delete_figure(self.opp_char)
+                self.opp_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.opp_colour+"_default.png"), location=(-60, 500))
+                text_elem.update(value="Left Block!")
+                direction  = "right"  
+                break
+            elif event == "S":
+                window['Graph'].delete_figure(self.my_char)
+                self.my_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.colour+"_defend_right.png"), location=(-60, 500))
+                window['Graph'].delete_figure(self.opp_char)
+                self.opp_char = window['Graph'].draw_image(filename=os.path.join(dir, "assets/"+self.opp_colour+"_default.png"), location=(-60, 500))
+                text_elem.update(value="Right Block!")
+                direction  = "left"  
+                break
+        return text_elem, event, direction
 
+    def gameOver(self, win=False):
+        if win:
+            str = "Hit landed! You win!"
+        else:
+            str = "You got Hit! Game Over!"
+        popup_layout = [  [sg.Text(str, font= ("Arial", 40))],[sg.Button('Click to end')]]
+        window = sg.Window('Game Over!', popup_layout, margins=(200, 200), use_default_focus=False, finalize=True, modal=True, element_justification='c')
+
+        while True:
+                event, values = window.read()
+                if event == sg.WIN_CLOSED : 
+                    break
+                if event == 'Click to end' :
+                    break
+ 
         window.close()
-
-    def gameOver(self):
-        pass
+        os._exit(1)(0)      
 
     def main(self):
         print('Number of arguments:', len(sys.argv), 'arguments.')
@@ -247,7 +323,7 @@ class GUI:
             self.createProxyMap()
             self.getLeader()
             self.choosePlayer()
-            # self.game()
+            self.game()
 
 
 if __name__ == '__main__':

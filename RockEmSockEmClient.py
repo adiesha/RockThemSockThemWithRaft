@@ -19,9 +19,11 @@ class RockEm:
         self.SERVER_PORT = 65431
         self.mapofNodes = None
         self.map = {}
+
         self.leader_id = None
         self.clientip = "127.0.0.1"
         self.clientPort = None
+
 
     def createJSONReq(self, typeReq, nodes=None, slot=None):
         # Get map data
@@ -55,6 +57,8 @@ class RockEm:
             server.serve_forever()
         except KeyboardInterrupt:
             print("Exiting")
+
+            self.menu()
 
     def createProxyMap(self):
         self.map = {}
@@ -134,6 +138,7 @@ class RockEm:
     def getJsonObj(self, input):
         jr = json.loads(input)
         return jr
+
 
     def getLeader(self):
         while (self.leader_id == None):
@@ -223,6 +228,7 @@ class RockEm:
             self.getLeader()
             self.choosePlayer()
             self.menu()
+
 
 if __name__ == '__main__':
     game = RockEm(1)

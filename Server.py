@@ -54,7 +54,7 @@ class Server():
                 conn, addr = s.accept()
                 with conn:
                     print(f"Connected by {addr}")
-                    time.sleep(2)
+                    # time.sleep(2)
                     while True:
                         data = self.receiveWhole(conn)
                         if data == b'':

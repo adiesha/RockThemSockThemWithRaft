@@ -1,7 +1,10 @@
 import json
+import os
 import random
 import socket
 import sys
+import threading
+from time import sleep
 from xmlrpc.client import ServerProxy
 
 
@@ -14,6 +17,15 @@ class RockEm:
         self.map = {}
         self.color = None
         self.state = None
+
+        self.block_with_left_state = 1
+        self.block_with_right_state = 2
+        self.punch_with_left_action = 3
+        self.punch_with_right_action = 4
+
+        self.gamestate = (None, None, None)
+        self.queue = []
+        self.queueMutex = threading.Lock()
 
     def createJSONReq(self, typeReq, nodes=None, slot=None):
         # Get map data
@@ -105,9 +117,40 @@ class RockEm:
                 elif resp[0] == 'l':
                     print("Trying to get the leader: {0}".format(self.getLeader()))
                 elif resp[0] == 's':
-                    leaderID = self.getLeader()
-                    self.color = (self.map[leaderID].registerPlayer())[1]
                     print(self.color)
+                    if self.color is None:
+                        leaderID = self.getLeader()
+                        self.color = (self.map[leaderID].registerPlayer())[1]
+                        print("Player Color: {0}".format(self.color))
+                        updatethread = threading.Thread(target=self.gotogame)
+                        updatethread.daemon = True
+                        updatethread.start()
+
+                        while True:
+                            x = input().lower().split()
+                            print("x:{0}".format(x))
+                            if not x:
+                                continue
+                            elif x[0] == 'e':
+                                exit(0)
+                            elif x[0] == 's':
+                                print(self.gamestate)
+                                print(self.queue)
+                                sleep(2)
+                                self.createProcessRequestThread()
+                            elif x[0] == 'a':
+                                try:
+                                    self.addToRequestQueue(3)
+                                    # result = self.map[leaderID].punch(self.color, self.punch_with_left_action)
+                                    # sleep(0.5)
+                                    # if result:
+                                    #     print("Input successful")
+                                except Exception as e:
+                                    print("Try again")
+                            else:
+                                continue
+                    else:
+                        print("Player already registered!")
                 elif resp[0] == 'g':
                     leaderID = self.getLeader()
                     color = {"b": 0, "r": 1}
@@ -135,12 +178,110 @@ class RockEm:
             k = random.choice(li)
             try:
                 leaderId = self.map[k].getLeaderInfo()
+                print('Found the leader')
                 return leaderId
             except Exception as e:
                 print("Looks like node is down, choosing a new node")
                 print(e)
                 li.remove(k)
                 continue
+
+    def gotogame(self):
+
+        while True:
+            if 7 not in self.queue:
+                self.addToRequestQueue(7)  # retrieve gamestate
+
+            # self.clearConsole()
+            print("Press [q] punch_with_left() [Q]")
+            print("Press [w] punch_with_right() [W]")
+            print("Press [a] block_with_left() [A]")
+            print("Press [s] block_with_right() [S]")
+            print("")
+            print(self.gamestate)
+            self.printGameState()
+            sleep(2)
+
+    def printGameState(self):
+        if self.gamestate[0] == None or self.gamestate[1] == None:
+            print("Players are joining")
+        else:
+            print("==============================================")
+            print("Player BLUE:")
+            print(self.getState(self.gamestate[0], "Blue"))
+            print("No State" if self.gamestate[2] is None else self.gamestate[2])
+
+    def getState(self, state, player):
+        if state is None:
+            return "Game hasn't started yet for player {0}".format(player)
+        if state == 0:
+            return "Normal stance"
+        elif state == 1:
+            return "Block Left"
+        elif state == 2:
+            return "Block Right"
+        elif state == 3:
+            return "Punch Left"
+        elif state == 4:
+            return "Punch Right"
+        elif state == 5:
+            return "Player {0} Won".format(player)
+        elif state == 6:
+            return "Player {0} List".format((player))
+
+    def clearConsole(self):
+        command = 'clear'
+        if os.name in ('nt', 'dos'):  # If Machine is running on Windows, use cls
+            command = 'cls'
+        os.system(command)
+
+    def addToRequestQueue(self, req):
+        try:
+            self.queueMutex.acquire()
+            if req != 7:
+                self.queue.insert(0, req)
+            else:
+                self.queue.append(req)
+            print("appended")
+        except Exception as e:
+            print(e)
+        finally:
+            self.queueMutex.release()
+
+    def createProcessRequestThread(self):
+        thread = threading.Thread(target=self.processRequests)
+        thread.daemon = True
+        thread.start()
+
+    def processRequests(self):
+        while True:
+            try:
+                # print("Processing")
+                self.queueMutex.acquire()
+                if self.queue:
+                    req = self.queue.pop(0)
+                    if req == 7:
+                        leaderid = self.getLeader()
+                        state = self.map[leaderid].getGameState()
+                        print(state)
+                        self.gamestate = (state['b'], state['r'], state['g'])
+                    elif req == 3 or req == 4:
+                        print("Processing punch")
+                        leaderid = self.getLeader()
+                        self.map[leaderid].punch(self.color, req)
+                    elif req == 1 or req == 2:
+                        print("processing block")
+                        leaderid = self.getLeader()
+                        self.map[leaderid].punch(self.color, req)
+                    else:
+                        print("Incorrect Request")
+                else:
+                    # print("Queue is empty")
+                    pass
+            except Exception as e:
+                print(e)
+            finally:
+                self.queueMutex.release()
 
 
 if __name__ == '__main__':

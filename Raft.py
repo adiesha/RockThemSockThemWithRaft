@@ -28,7 +28,7 @@ class Raft:
         self.votedFor = None
         self.log = []
         self.map = None  # Map about the other nodes
-        self.noOfNodes = None
+        self.noOfNodes = 0
 
         self.state = State.FOLLOWER
         self.leader = None
@@ -36,6 +36,7 @@ class Raft:
         # volatile states
         self.commitIndex = -1
         self.lastApplied = 0
+        self.stateIndex = 0
 
         # volatile state on leader
         self.nextIndex = None
@@ -56,35 +57,11 @@ class Raft:
         self.SERVER_PORT = 65431
         self.mapofNodes = None
 
-        self.timeoutFlag = False
-        self.leaderTimeoutFlag = False
-        self.electionTimeoutFlag = False
-
-        self._persist = None
-
-        self.blue = None
-        self.red = None
-
-        self.gameMutex = threading.Lock()
-
-        self.bstate = 0
-        self.baction = 0
-        self.bgotblocked = False
-        self.blastpunchtime = 0
-
-        self.rstate = 0
-        self.raction = 0
-        self.rgotblocked = False
-        self.rlastpunchtime = 0
-
-        self.normal_state = 0
-        self.block_with_left_state = 1
-        self.block_with_right_state = 2
-        self.punch_with_left_action = 3
-        self.punch_with_right_action = 4
-        self.won = 5
-
-        self.gameMessage = ""
+        # Game state Variables
+        self.blueID = None
+        self.blueState = None
+        self.redID = None
+        self.redState = None
 
     # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the heartbeat for leader
@@ -339,8 +316,9 @@ class Raft:
         info['value'] = pickle.dumps(entry)
 
         # Node is the leader
-        for k, v, in self.map.items():
-            v.appendEntries(info)
+        for k, v in self.map.items():
+            if k < 100:
+                v.appendEntries(info)
         pass
 
     # This method should invoke heartbeat function of other nodes
@@ -365,7 +343,7 @@ class Raft:
             "Node:{0} Term: {1} state: {2} votedFor: {3}".format(self.id, self.currentTerm, self.state, self.votedFor))
 
         for k, v in self.map.items():
-            if k != self.id:
+            if k != self.id and k < 100:
                 # result = self.createDaemon(v.requestVote, inf)
                 self.requestVoteFromNode(k, v, inf, vote)
 
@@ -512,7 +490,7 @@ class Raft:
                 info = self.createApppendEntryInfo()
                 info['value'] = None
                 for k, v in self.map.items():
-                    if k != self.id:
+                    if k != self.id and k < 100:
                         self.callAppendEntryForaSingleNode(k, v, hb=True)
                         # v.appendEntries(info)
 
@@ -546,7 +524,8 @@ class Raft:
                     logging.debug("Leaders volatile state has not been updated retrying")
                     continue
                 print("Current Commit Index {0}".format(self.commitIndex))
-                print("TempCommitIndex {0}".format(temp))
+
+                print("Current State Index {0}".format(self.stateIndex))
                 logging.debug("Current Commit Index {0}".format(self.commitIndex))
                 # temp = self.commitIndex + 1
                 count = 0
@@ -589,27 +568,6 @@ class Raft:
             else:
                 # print("Not the leader to find the commit index")
                 pass
-
-    def addRequest(self, value):
-        if self.state is State.LEADER:
-            # add the entry to the log
-            entry = Entry(0, self.currentTerm)  # id is not the correct one so we update it in the next two lines
-            entry.value = value
-            entry.owner = self.id
-            self.log.append(entry)
-            entry.id = len(self.log) - 1
-            print("Entry ID: {0}".format(entry.id))
-            logging.debug("Entry ID: {0}".format(entry.id))
-
-            for k, v in self.map.items():
-                if k != self.id:
-                    self.callAppendEntryForaSingleNode(k, v)
-            return True
-
-        else:
-            print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
-            logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
-            return False
 
     def callAppendEntryForaSingleNode(self, k, v, hb=False):
         # this method should spawn a thread
@@ -894,14 +852,15 @@ class Raft:
 
     def menu(self, d):
         self.createTimeoutThread()
+        self.createGameStateUpdateThread()
         while True:
             print("Display Raft DashBoard\t")
             print("Press d for Diagnostics\t")
             print("Press t for timeout manually\t")
             print("Press f for fail the process\t")
-            print("Press r to print the log\t")
+            print("Press p to print the log\t")
             print("Press e to exit the program\t")
-            print("Press a to manually add an entry\t")
+            print("Press q to recover state\t")
             print("Press any key to get the menu\t")
             resp = input("Choice: ").lower().split()
             if not resp:
@@ -910,24 +869,12 @@ class Raft:
                 self._diagnostics()
             elif resp[0] == 'q':
                 self.recover(self.id)
-            elif resp[0] == 'r':
-                self.printLog()
-            elif resp[0] == 'a':
-                x = input("What do you want to add?")
-                self.addRequest(x)
             elif resp[0] == 'f':
                 exit(0)
+            elif resp[0] == 'p':
+                self.printLog()
             elif resp[0] == 'g':
-                print("BLUE: {0}".format(self.blue))
-                print("RED: {0}".format(self.red))
-                print("Bstate {0}".format(self.bstate))
-                print("baction:{0}".format(self.baction))
-                print("bgotblocked:{0}".format(self.bgotblocked))
-                print("blastpunchtime:{0}".format(self.blastpunchtime))
-                print("Rstate:{0}".format(self.rstate))
-                print("Raction:{0}".format(self.raction))
-                print("rgotblocked:{0}".format(self.rgotblocked))
-                print("rlastpunchtime:{0}".format(self.rlastpunchtime))
+                self.displayState()
             elif resp[0] == 't':
                 self.timeoutFlag = True
                 self.receivedHeartBeat = False
@@ -1258,6 +1205,118 @@ class Raft:
             return True
 
 
+    def setPlayer(self, id, input):
+        if self.state is State.LEADER:
+            flag = True
+            for e in self.log:
+                if e.choice == input:
+                    flag = False
+            if flag:
+                entry = Entry(0, self.currentTerm)            
+                self.log.append(entry)                 
+                entry.player = id
+                entry.choice = input
+                entry.move = "c"
+                entry.id = len(self.log) - 1
+                print("Entry ID: {0}".format(entry.id))
+                logging.debug("Entry ID: {0}".format(entry.id))
+
+                for k, v in self.map.items():
+                    if k != self.id and k < 100:
+                        self.callAppendEntryForaSingleNode(k, v)
+
+                return 1
+            else:
+                return 2
+        else:
+            print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
+            logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
+            return 3
+
+    def playerMove(self, id, input):
+        if self.state is State.LEADER:
+
+            entry = Entry(0, self.currentTerm)             
+            self.log.append(entry)
+            entry.player = id
+            entry.move = input
+            entry.id = len(self.log) - 1 
+            print("Entry ID: {0}".format(entry.id))
+            logging.debug("Entry ID: {0}".format(entry.id))
+
+            for k, v in self.map.items():
+                if k != self.id and k < 100:
+                    self.callAppendEntryForaSingleNode(k, v)
+
+            if id == self.blueID:
+                oppID = self.redID
+                oppState = self.redState
+            else:
+                oppID = self.blueID
+                oppState = self.blueState
+            if input == "q":
+                if oppState == "s":
+                    return 1
+                else:
+                    if random.random() < 0.10:
+                        return int(oppID)
+                    else:
+                        return 2
+            elif input == "w":
+                if oppState == "a":
+                    return 1
+                else:
+                    if random.random() < 0.10:
+                        return int(oppID)
+                    else:
+                        return 2
+            else:
+                return 0
+        else:
+            print("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
+            logging.debug("Node {0} is not the leader. cannot add the entry. Try the leader".format(self.id))
+            return False
+
+
+    
+    def displayState(self):
+        print("Blue Node: "+ str(self.blueID))
+        print("Blue State: "+ str(self.blueState))
+        print("Red Node: "+ str(self.redID))
+        print("Red State: "+ str(self.redState))
+
+    def createGameStateUpdateThread(self):
+        thread = threading.Thread(target=self.stateUpdate)
+        thread.daemon = True
+        thread.start()
+
+    def stateUpdate(self):
+        while True:
+            if self.stateIndex < self.commitIndex+1:
+                for e in range(self.stateIndex, self.commitIndex+1):
+                    print(self.log[e])
+                    if self.log[e].move == "c":
+                        if self.log[e].choice == "1":
+                            self.redID = self.log[e].player
+                        elif self.log[e].choice == "2":
+                            self.blueID = self.log[e].player
+                    elif self.log[e].move == "q" or self.log[e].move == "w":
+                        if self.redID == self.log[e].player:
+                            self.redState = None
+                        else:
+                            self.blueState = None
+                    elif self.log[e].move == "a":
+                        if  self.redID == self.log[e].player:
+                            self.redState = "a"
+                        else:
+                            self.blueState = "a"
+                    elif self.log[e].move == "s":
+                        if self.redID == self.log[e].player:
+                            self.redState = "s"
+                        else:
+                            self.blueState = "s"
+                    self.stateIndex+=1
+
 class State(Enum):
     FOLLOWER = 1
     CANDIDATE = 2
@@ -1266,15 +1325,16 @@ class State(Enum):
 
 class Entry:
     def __init__(self, id, term):
-        self.value = None
         self.id = id
         self.term = term
+        self.player = None
+        self.choice = None
+        self.move = None
         self.iscommitted = False
         self.owner = None
 
     def __str__(self):
-        return "id:{0} term:{1} val:{2} isCommitted: {3} AddedBy: {4}\t".format(self.id, self.term, self.value,
-                                                                                self.iscommitted, self.owner)
+        return "Entry id:{0} term:{1} Player:{2} Choice:{3} Move:{4} isCommitted: {5}\t".format(self.id, self.term, self.player, self.choice, self.move, self.iscommitted)
 
 
 class Vote:
@@ -1329,6 +1389,7 @@ def _persist(obj):
         file.close()
     except Exception as e:
         print("Exception Occurred while accessing persistent storage {0}".format(e))
+
 
 
 if __name__ == "__main__":

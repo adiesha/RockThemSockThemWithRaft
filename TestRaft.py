@@ -1,12 +1,56 @@
+import pickle
+import threading
+import time
 from time import sleep
 
-from Raft import Raft, State, Entry
+from Raft import Raft, State, Entry, Persist
 
 
 def main():
-    testSimpleMajorityMethod()
-    testRequestVoteMethod()
-    testingTimoutMethod()
+    # testSimpleMajorityMethod()
+    # testRequestVoteMethod()
+    # testingTimoutMethod()
+    start = time.perf_counter()
+    testSleep(1)
+    print(time.perf_counter() - start)
+
+    flag = Flag()
+    thread = threading.Thread(target=resetFlag, args=(flag,))
+    thread.daemon = True
+    thread.start()
+    start = time.perf_counter()
+    testSleep(2, flag)
+    print(time.perf_counter() - start)
+    flag.flag = True
+    print(getattr(flag, 'flag'))
+    flag.flag = False
+    print(getattr(flag, 'flag'))
+    setattr(flag, 'flag', True)
+    print(flag.flag)
+
+    file_to_read = open("persist/data3.pickle", "rb")
+    loaded_object = pickle.load(file_to_read)
+    file_to_read.close()
+    print(loaded_object)
+    print(type(loaded_object) == Persist)
+
+class Flag:
+    def __init__(self):
+        self.flag = False
+
+
+def resetFlag(flag):
+    while True:
+        sleep(1)
+        flag.flag = not flag.flag
+
+
+def testSleep(seconds, flag=Flag()):
+    startingtime = time.perf_counter()
+    while not flag.flag:
+        now = time.perf_counter()
+        if now - startingtime >= seconds:
+            return
 
 
 def testSimpleMajorityMethod():
@@ -70,7 +114,6 @@ def testingTimoutMethod():
     print(r2.nextIndex)
     print(r3.nextIndex)
 
-
     e = Entry(2, 3)
     r1.addRequest(e)
     r2.addRequest(e)
@@ -84,7 +127,6 @@ def testingTimoutMethod():
     print(r1.matchIndex)
     print(r2.matchIndex)
     print(r3.matchIndex)
-
 
     print(r1.nextIndex)
     print(r2.nextIndex)

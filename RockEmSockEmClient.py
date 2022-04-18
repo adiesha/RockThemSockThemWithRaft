@@ -100,7 +100,10 @@ class RockEm:
     def menu(self):
         while True:
             while True:
-                print("Display RockEm DashBoard\t[d]")
+                print("Display RockEm DashBoard. Also can be used to demonstrate the Raft client\t[d]")
+                print("Press [a] to add something to Raft Log \t[d]")
+                print("Press [s] to start the game\t[d]")
+                print("Press [l] to print the leader\t[d]")
                 resp = input("Choice: ").lower().split()
                 if not resp:
                     continue
@@ -117,34 +120,56 @@ class RockEm:
                 elif resp[0] == 'l':
                     print("Trying to get the leader: {0}".format(self.getLeader()))
                 elif resp[0] == 's':
-                    print(self.color)
+                    # print(self.color)
                     if self.color is None:
+                        print("Press [s] again to continue")
+                        print("Press [e] to exit the system")
                         leaderID = self.getLeader()
                         self.color = (self.map[leaderID].registerPlayer())[1]
                         print("Player Color: {0}".format(self.color))
                         updatethread = threading.Thread(target=self.gotogame)
                         updatethread.daemon = True
                         updatethread.start()
-
+                        print("Game update thread created!")
+                        self.createProcessRequestThread()
                         while True:
+                            print("Press [s] again to register the player")
+                            print("Press [e] to exit the system")
+                            print("Press [q] to punch left")
+                            print("Press [w] to punch right")
+                            print("Press [a] to block with left")
+                            print("Press [s] to block with right")
+                            print("Press anything to do nothing")
+
                             x = input().lower().split()
-                            print("x:{0}".format(x))
+                            print("Input Entered:{0}".format(x))
                             if not x:
                                 continue
                             elif x[0] == 'e':
                                 exit(0)
-                            elif x[0] == 's':
-                                print(self.gamestate)
-                                print(self.queue)
-                                sleep(2)
-                                self.createProcessRequestThread()
+                            # elif x[0] == 's':
+                            #     print("Printing initial state and queues")
+                            #     print(self.gamestate)
+                            #     print(self.queue)
+                            #     self.createProcessRequestThread()
+                            elif x[0] == 'q':
+                                try:
+                                    self.addToRequestQueue(self.punch_with_left_action)
+                                except Exception as e:
+                                    print("Try again")
+                            elif x[0] == 'w':
+                                try:
+                                    self.addToRequestQueue(self.punch_with_right_action)
+                                except Exception as e:
+                                    print("Try again")
                             elif x[0] == 'a':
                                 try:
-                                    self.addToRequestQueue(3)
-                                    # result = self.map[leaderID].punch(self.color, self.punch_with_left_action)
-                                    # sleep(0.5)
-                                    # if result:
-                                    #     print("Input successful")
+                                    self.addToRequestQueue(self.block_with_left_state)
+                                except Exception as e:
+                                    print("Try again")
+                            elif x[0] == 's':
+                                try:
+                                    self.addToRequestQueue(self.block_with_right_state)
                                 except Exception as e:
                                     print("Try again")
                             else:
@@ -192,13 +217,13 @@ class RockEm:
             if 7 not in self.queue:
                 self.addToRequestQueue(7)  # retrieve gamestate
 
-            # self.clearConsole()
+            self.clearConsole()
             print("Press [q] punch_with_left() [Q]")
             print("Press [w] punch_with_right() [W]")
             print("Press [a] block_with_left() [A]")
             print("Press [s] block_with_right() [S]")
             print("")
-            print(self.gamestate)
+            # print(self.gamestate)
             self.printGameState()
             sleep(2)
 
@@ -209,7 +234,11 @@ class RockEm:
             print("==============================================")
             print("Player BLUE:")
             print(self.getState(self.gamestate[0], "Blue"))
+            print("++++++++++++++++++++++++++++++++++++++++++++++")
+            print("Player RED:")
+            print(self.getState(self.gamestate[1], "Blue"))
             print("No State" if self.gamestate[2] is None else self.gamestate[2])
+            print("==============================================")
 
     def getState(self, state, player):
         if state is None:
@@ -227,7 +256,7 @@ class RockEm:
         elif state == 5:
             return "Player {0} Won".format(player)
         elif state == 6:
-            return "Player {0} List".format((player))
+            return "Player {0} Lost".format(player)
 
     def clearConsole(self):
         command = 'clear'
@@ -251,6 +280,7 @@ class RockEm:
     def createProcessRequestThread(self):
         thread = threading.Thread(target=self.processRequests)
         thread.daemon = True
+        print("Request Processing Thread")
         thread.start()
 
     def processRequests(self):
@@ -264,7 +294,8 @@ class RockEm:
                         leaderid = self.getLeader()
                         state = self.map[leaderid].getGameState()
                         print(state)
-                        self.gamestate = (state['b'], state['r'], state['g'])
+                        print((state['b'], state['r'], state['m']))
+                        self.gamestate = (state['b'], state['r'], state['m'])
                     elif req == 3 or req == 4:
                         print("Processing punch")
                         leaderid = self.getLeader()
@@ -279,6 +310,7 @@ class RockEm:
                     # print("Queue is empty")
                     pass
             except Exception as e:
+                print("Wow exception")
                 print(e)
             finally:
                 self.queueMutex.release()

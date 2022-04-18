@@ -203,7 +203,7 @@ class RockEm:
             k = random.choice(li)
             try:
                 leaderId = self.map[k].getLeaderInfo()
-                print('Found the leader')
+                # print('Found the leader')
                 return leaderId
             except Exception as e:
                 print("Looks like node is down, choosing a new node")
@@ -293,8 +293,8 @@ class RockEm:
                     if req == 7:
                         leaderid = self.getLeader()
                         state = self.map[leaderid].getGameState()
-                        print(state)
-                        print((state['b'], state['r'], state['m']))
+                        # print(state)
+                        # print((state['b'], state['r'], state['m']))
                         self.gamestate = (state['b'], state['r'], state['m'])
                     elif req == 3 or req == 4:
                         print("Processing punch")

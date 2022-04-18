@@ -1073,18 +1073,24 @@ class Raft:
             return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
         if self.bstate == 0 and self.rstate == 0:
             self.gameMessage = "Players joined. Ready to start"
-            self.gameMutex.release()
-            return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
+            # self.gameMutex.release()
+            # return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
         if self.bstate == 5 or self.bstate == 6:
             self.gameMutex.release()
             return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
+        self.blastpunchtime = 0
+        self.rlastpunchtime = 0
+        self.bgotblocked = False
+        self.rgotblocked = False
         for i in range(len(copy)):
             val = self.log[i].value
             print("val{0}".format(val))
             if "1" in val:
                 self.blue = True
+                self.gameMessage = "Player BLUE joined"
             if "2" in val:
                 self.red = True
+                self.gameMessage = self.gameMessage + " Player RED joined"
             if 'action' in val:
                 print(val['action'])
             if "player" in val:
@@ -1120,7 +1126,9 @@ class Raft:
                                             self.blastpunchtime = punchtime
                                             self.bstate = val['action']
                                 else:
-                                    self.gameMessage = "B cannot punch, B got blocked earlier"
+                                    if punchtime == self.blastpunchtime:
+                                        continue
+                                    self.gameMessage = "B cannot punch, B got blocked earlier {0}-{1}<3".format(punchtime, self.blastpunchtime)
                                     print("Too early. Nothing to update")
                             else:  # b was not blocked before
                                 if punchtime - self.blastpunchtime > 1:
@@ -1143,7 +1151,9 @@ class Raft:
                                             self.blastpunchtime = punchtime
                                             self.bstate = val['action']
                                 else:
-                                    self.gameMessage = "B cannot punch, B has to wait at least one second to punch"
+                                    if punchtime == self.blastpunchtime:
+                                        continue
+                                    self.gameMessage = "B cannot punch, B has to wait at least one second to punch {0}-{1}<1".format(punchtime, self.blastpunchtime)
                                     print("Too early. Nothing to update")
                         if val['action'] == 4:
                             if self.bgotblocked:

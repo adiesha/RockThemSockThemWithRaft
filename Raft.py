@@ -151,7 +151,7 @@ class Raft:
                     self.commitIndex = leadercommitIndex
                     self.updateCommittedEntries()
             self._persist.updateCurrentInfo(self.currentTerm, self.votedFor, self.log)
-            _persist(self._persist)
+            _persist(self._persist, self.log)
         self.mutexForAppendEntry.release()
         # print("Mutex for appendEntry is released in node {0}".format(self.id))
         logging.debug("Mutex for appendEntry is released in node {0}".format(self.id))
@@ -205,7 +205,7 @@ class Raft:
                 print("Node {0} 's current Term is updated to {1} state {2}".format(self.id, self.currentTerm,
                                                                                     self.state))
                 self._persist.updateCurrentInfo(self.currentTerm, self.votedFor, self.log)
-                _persist(self._persist)
+                _persist(self._persist, self.log)
                 return True
         else:
             print("AppendEntry from {0} to node {1} leader's Term {2} is not a HB".format(info['leaderid'], self.id,
@@ -293,14 +293,14 @@ class Raft:
                     else:
                         self.votedFor = candidateid
                         self._persist.updateCurrentInfo(self.currentTerm, self.votedFor, self.log)
-                        _persist(self._persist)
+                        _persist(self._persist, self.log)
                         self.mutexForAppendEntry.release()
                         # print('Releasing mutex for request vote in node {0}'.format(self.id))
                         return True
                 else:  # candidates last log term is greater than the nodes last term therefore candidate is more updated
                     self.votedFor = candidateid
                     self._persist.updateCurrentInfo(self.currentTerm, self.votedFor, self.log)
-                    _persist(self._persist)
+                    _persist(self._persist, self.log)
                     self.mutexForAppendEntry.release()
                     # print('Releasing mutex for request vote in node {0}'.format(self.id))
                     return True
@@ -754,7 +754,7 @@ class Raft:
                 self._persist.updateNetworkInfo(self.HOST, self.clientip, self.clientPort)
                 self._persist.updateNodeInfo(self.id, self.mapofNodes, self.noOfNodes)
                 self._persist.updateCurrentInfo(0, None, [])
-                _persist(self._persist)
+                _persist(self._persist, self.log)
 
                 # self.createThreadToListen()
                 # self.createHeartBeatThread()
@@ -1364,13 +1364,23 @@ class Persist:
             self.log, self.id)
 
 
-def _persist(obj):
+def _persist(obj, log):
     try:
         file = open("persist/data{0}.pickle".format(obj.id), "wb")
         pickle.dump(obj, file)
         file.close()
     except Exception as e:
         print("Exception Occurred while accessing persistent storage {0}".format(e))
+
+    if log and log is not None:
+        try:
+            copy = log.copy()
+            file = open("log/log-readable{0}.txt".format(obj.id), "w")
+            for e in copy:
+                file.write(str(e) + "\n")
+            file.close()
+        except Exception as e:
+            print("Exception occurred while persisting readable log {0}".format(e))
 
 
 if __name__ == "__main__":

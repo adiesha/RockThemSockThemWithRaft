@@ -61,7 +61,7 @@ class Raft:
         self.electionTimeoutFlag = False
 
         self._persist = None
-
+        self.logMutex = threading.Lock()
         self.blue = None
         self.red = None
 
@@ -594,7 +594,7 @@ class Raft:
             entry.id = len(self.log) - 1
             print("Entry ID: {0}".format(entry.id))
             logging.debug("Entry ID: {0}".format(entry.id))
-
+            _persist(self._persist, self.log)
             for k, v in self.map.items():
                 if k != self.id:
                     self.callAppendEntryForaSingleNode(k, v)
@@ -1374,6 +1374,7 @@ def _persist(obj, log):
 
     if log and log is not None:
         try:
+            print("Logging tto readable storagre {0}".format(obj,id))
             copy = log.copy()
             file = open("log/log-readable{0}.txt".format(obj.id), "w")
             for e in copy:

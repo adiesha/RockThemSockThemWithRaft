@@ -109,10 +109,11 @@ class RockEm:
                     continue
                 elif resp[0] == 'a':
                     while True:
-                        leaderID = self.map[2].getLeaderInfo()
+                        leaderID = self.getLeader()
+                        tempasd = input("Input value:")
                         if leaderID is not None:
                             try:
-                                result = self.map[leaderID].addRequest({"1": 1})
+                                result = self.map[leaderID].addRequest({tempasd: random.randint(1,2)})
                                 if result:
                                     break
                             except Exception as e:

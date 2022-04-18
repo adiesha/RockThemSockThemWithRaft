@@ -108,9 +108,9 @@ class Raft:
             prevLogIndex = info['previouslogindex']
             prevLogTerm = info['previouslogterm']
             leadercommitIndex = info['leadercommit']
-            print("leaddercommmit {0}".format(leadercommitIndex))
-            print("prevLogIndex {0}".format(prevLogIndex))
-            print(info)
+            # print("leaddercommmit {0}".format(leadercommitIndex))
+            # print("prevLogIndex {0}".format(prevLogIndex))
+            # print(info)
             if prevLogIndex == -1:
                 pass
             else:
@@ -118,7 +118,7 @@ class Raft:
                 # if node is behind the leader prevlogindex may not be in the log
                 print("len of log" + str(len(self.log)))
                 if self.log[prevLogIndex].term != prevLogTerm:
-                    print("haha")
+                    # print("haha")
                     self.mutexForAppendEntry.release()
                     # print("Mutex for appendEntry is released in node {0}".format(self.id))
                     logging.debug("Mutex for appendEntry is released in node {0}".format(self.id))
@@ -169,12 +169,12 @@ class Raft:
         if info['values'] is None:
             info['values'] = []
         else:
-            print("Before")
-            print(info['values'])
+            # print("Before")
+            # print(info['values'])
             info['values'] = pickle.loads(info['values'].data)
-            print("After")
-            print(info['values'])
-        print(info['values'])
+            # print("After")
+            # print(info['values'])
+        # print(info['values'])
         if len(info['values']) == 0:
             if info['term'] < self.currentTerm:
                 print("Term from the heartbeat is lower: HB Term {0} current term {1}".format(info['term'],
@@ -442,7 +442,7 @@ class Raft:
         dict['previouslogterm'] = self.getLastTerm()
         dict['values'] = None
         dict['leadercommit'] = self.commitIndex
-        print(dict)
+        # print(dict)
 
         return dict
 
@@ -450,7 +450,7 @@ class Raft:
         while True:
             randomTimeout = random.randint(7, 12)
             if self.state == State.FOLLOWER:
-                print("Chosen timeout for node {0} is {1}".format(self.id, randomTimeout))
+                # print("Chosen timeout for node {0} is {1}".format(self.id, randomTimeout))
                 logging.debug("Chosen timeout for node {0} is {1}".format(self.id, randomTimeout))
                 # sleep(randomTimeout)
                 self.raftsleep(randomTimeout, self, "timeoutFlag")
@@ -459,9 +459,9 @@ class Raft:
                 self.mutexForHB.acquire()
                 if self.receivedHeartBeat:
                     self.receivedHeartBeat = False
-                    print(
-                        "Timeout occurred but Heartbeat was received by the node {0} earlier. Picking a new timeout".format(
-                            self.id))
+                    # print(
+                    #     "Timeout occurred but Heartbeat was received by the node {0} earlier. Picking a new timeout".format(
+                    #         self.id))
                     logging.debug(
                         "Timeout occurred but Heartbeat was received by the node {0} earlier. Picking a new timeout".format(
                             self.id))
@@ -474,9 +474,9 @@ class Raft:
                     self.mutexForHB.release()
                     # print("Releasing HB mutex")
                     logging.debug("Releasing HB mutex")
-                    print(
-                        "Timeout occurred NO Heartbeat was received by the node {0} earlier. Picking a new timeout".format(
-                            self.id))
+                    # print(
+                    #     "Timeout occurred NO Heartbeat was received by the node {0} earlier. Picking a new timeout".format(
+                    #         self.id))
                     logging.debug(
                         "Timeout occurred NO Heartbeat was received by the node {0} earlier. Picking a new timeout".format(
                             self.id))
@@ -536,49 +536,49 @@ class Raft:
             if self.state == State.LEADER:
                 if self.matchIndex is None or self.nextIndex is None:
                     sleep(2)
-                    print("Leaders volatile state has not been updated retrying")
+                    # print("Leaders volatile state has not been updated retrying")
                     logging.debug("Leaders volatile state has not been updated retrying")
                     continue
-                print("Current Commit Index {0}".format(self.commitIndex))
-                print("TempCommitIndex {0}".format(temp))
+                # print("Current Commit Index {0}".format(self.commitIndex))
+                # print("TempCommitIndex {0}".format(temp))
                 logging.debug("Current Commit Index {0}".format(self.commitIndex))
                 # temp = self.commitIndex + 1
                 count = 0
                 if 0 <= temp < len(self.log):
                     count = count + 1
                 else:
-                    print("Next index does not exist in the log next index {0}, length of log {1}".format(temp,
-                                                                                                          len(self.log)))
+                    # print("Next index does not exist in the log next index {0}, length of log {1}".format(temp,
+                    #                                                                                       len(self.log)))
                     logging.debug("Next index does not exist in the log next index {0}, length of log {1}".format(temp,
                                                                                                                   len(self.log)))
                     sleep(3)
                     continue
                 for i in range(self.noOfNodes):
                     if i != self.id:
-                        print("matchedIndexInCommitThread" + str(self.matchIndex))
+                        # print("matchedIndexInCommitThread" + str(self.matchIndex))
                         if temp <= self.matchIndex[i - 1]:
                             count = count + 1
-                print("Count: {0}".format(count))
-                print('Simple Majority: {0}'.format(self.getSimpleMajority()))
+                # print("Count: {0}".format(count))
+                # print('Simple Majority: {0}'.format(self.getSimpleMajority()))
                 if count >= self.getSimpleMajority():
                     if self.log[temp].term == self.currentTerm:
-                        print("Next commit index is {0}".format(temp))
+                        # print("Next commit index is {0}".format(temp))
                         logging.debug("Next commit index is {0}".format(temp))
                         self.commitIndex = temp
                         self.log[temp].iscommitted = True
                         temp += 1
                     else:
-                        print(
-                            "Entry ID:{0} is replicated in majority but was not appended by current term {1} and "
-                            "leader {1}".format(
-                                temp, self.currentTerm, self.id))
+                        # print(
+                        #     "Entry ID:{0} is replicated in majority but was not appended by current term {1} and "
+                        #     "leader {1}".format(
+                        #         temp, self.currentTerm, self.id))
                         logging.debug(
                             "Entry ID:{0} is replicated in majority but was not appended by current term {1} and "
                             "leader {1}".format(
                                 temp, self.currentTerm, self.id))
                         temp += 1
                 sleep(3)
-                print("Waked up")
+                # print("Waked up")
                 # temp += 1
             else:
                 # print("Not the leader to find the commit index")
@@ -611,18 +611,18 @@ class Raft:
             while True:
                 info = self.createApppendEntryInfo()
                 values = []
-                print("NextIndex:" + str(self.nextIndex))
+                # print("NextIndex:" + str(self.nextIndex))
                 if self.nextIndex[k - 1] > self.getLastIndex() and not hb:
-                    print("Node {0} is up to date".format(k))
+                    # print("Node {0} is up to date".format(k))
                     logging.debug("Node {0} is up to date".format(k))
                     return True
                 hb = False  # HB flag is set to false because we do not need to loop this indefinitely
                 if not self.log:
-                    print("Log is empty, Therefore values would be empty as well. This would be a heartbeat")
+                    # print("Log is empty, Therefore values would be empty as well. This would be a heartbeat")
                     logging.debug("Log is empty, Therefore values would be empty as well. This would be a heartbeat")
                 else:
-                    print("Length " + str(len(self.log)) + " k: " + str(k) + " nextIndex " + str(
-                        len(self.nextIndex)) + " nextIndexValue: " + str(self.nextIndex[k - 1]))
+                    # print("Length " + str(len(self.log)) + " k: " + str(k) + " nextIndex " + str(
+                    #     len(self.nextIndex)) + " nextIndexValue: " + str(self.nextIndex[k - 1]))
                     logging.debug("Length " + str(len(self.log)) + " k: " + str(k) + " nextIndex " + str(
                         len(self.nextIndex)) + " nextIndexValue: " + str(self.nextIndex[k - 1]))
                     if not (self.nextIndex[k - 1] > self.getLastIndex()):  # need to do this check again for HB without
@@ -631,24 +631,24 @@ class Raft:
                         info['previouslogindex'] = int(self.nextIndex[k - 1] - 1)
                         info['previouslogterm'] = 0 if self.nextIndex[k - 1] - 1 < 0 else self.log[
                             self.nextIndex[k - 1] - 1].term
-                        print("sdf: {0}".format(info['previouslogindex']))
-                        print("sdf2: {0}".format(info['previouslogterm']))
+                        # print("sdf: {0}".format(info['previouslogindex']))
+                        # print("sdf2: {0}".format(info['previouslogterm']))
                 if len(values) == 0:
                     info['values'] = None
                 else:
                     info['values'] = pickle.dumps(values)
-                    print(info['values'])
+                    # print(info['values'])
                     print(pickle.loads(info['values']))
                 if self.state is State.LEADER:
                     result, term = v.appendEntries(info)
-                    print("RESULT: {0} Term {1} from Node{2}".format(result, term, k))
+                    # print("RESULT: {0} Term {1} from Node{2}".format(result, term, k))
                     logging.debug("RESULT: {0} Term {1} from Node{2}".format(result, term, k))
                     if result:
                         # update the nextIndex and matchindex
-                        print("values: {0}".format(values))
+                        # print("values: {0}".format(values))
                         if values:
                             id = values[-1].id
-                            print("buuuwwa" + str(self.matchIndex))
+                            # print("buuuwwa" + str(self.matchIndex))
                             if self.matchIndex[k - 1] <= id:
                                 self.matchIndex[k - 1] = id
                             self.nextIndex[k - 1] = id + 1
@@ -761,7 +761,7 @@ class Raft:
                 self.menu(self)
         else:
             print("Skipping Initialization mode and send Node Port")
-            nodeId = input("Input persistent ID")
+            nodeId = input("Input persistent ID: ")
             self.recover(nodeId)
             self._createRPCServer()
             self.menu(self)
@@ -936,6 +936,7 @@ class Raft:
         print("ServerIP: {0}".format(self.HOST))
         print("Raft Server IP: {0}".format(self.clientip))
         print("Raft Port: {0}".format(self.clientip))
+        print("Raft Node state: {0}".format(self.state))
         print("CommitIndex: {0}".format(self.commitIndex))
         print("Current Term : {0}".format(self.currentTerm))
         print("MatchIndex: {0}".format(self.matchIndex))

@@ -87,12 +87,6 @@ class Raft:
         self.gameMessage = ""
 
     # This is the remote procedure call for leader to invoke in nodes
-    # This is not the procedure call that does the heartbeat for leader
-    # We can create a daemon that issues appendEntries to all the nodes if they are the leader
-    def heartbeat(self, message):
-        print("heartbeat invoked in node {0}".format(self.id))
-
-    # This is the remote procedure call for leader to invoke in nodes
     # This is not the procedure call that does the appendEntries for leader
     def appendEntries(self, info):
         self.mutexForAppendEntry.acquire()
@@ -321,32 +315,32 @@ class Raft:
             # print('Releasing mutex for request vote in node {0}'.format(self.id))
             return False
 
-    # invoking appendEntries of other nodes
-    # This method should not be exposed to invoke
-    def _invokeAppendEntries(self):
-        # check whether you are the leader
-        if self.state != State.LEADER:
-            print("Node {0} is not the leader cannot add entries".format(self.id))
-            return
+    # # invoking appendEntries of other nodes
+    # # This method should not be exposed to invoke
+    # def _invokeAppendEntries(self):
+    #     # check whether you are the leader
+    #     if self.state != State.LEADER:
+    #         print("Node {0} is not the leader cannot add entries".format(self.id))
+    #         return
+    #
+    #     # add the entry to the log
+    #     entry = Entry(len(self.log), self.currentTerm)
+    #     self.log.append(entry)
+    #     entry.id = len(self.log) - 1
+    #
+    #     info = self.createApppendEntryInfo()
+    #
+    #     info['value'] = pickle.dumps(entry)
+    #
+    #     # Node is the leader
+    #     for k, v, in self.map.items():
+    #         v.appendEntries(info)
+    #     pass
 
-        # add the entry to the log
-        entry = Entry(len(self.log), self.currentTerm)
-        self.log.append(entry)
-        entry.id = len(self.log) - 1
-
-        info = self.createApppendEntryInfo()
-
-        info['value'] = pickle.dumps(entry)
-
-        # Node is the leader
-        for k, v, in self.map.items():
-            v.appendEntries(info)
-        pass
-
-    # This method should invoke heartbeat function of other nodes
-    # This method should not be exposed to invoke
-    def _invokeHeartBeat(self):
-        pass
+    # # This method should invoke heartbeat function of other nodes
+    # # This method should not be exposed to invoke
+    # def _invokeHeartBeat(self):
+    #     pass
 
     def _invokeRequestVoteRPV(self):
         print("Invoking Election by Node {0}".format(self.id))
@@ -1128,7 +1122,8 @@ class Raft:
                                 else:
                                     if punchtime == self.blastpunchtime:
                                         continue
-                                    self.gameMessage = "B cannot punch, B got blocked earlier {0}-{1}<3".format(punchtime, self.blastpunchtime)
+                                    self.gameMessage = "B cannot punch, B got blocked earlier {0}-{1}< 3".format(
+                                        punchtime, self.blastpunchtime)
                                     print("Too early. Nothing to update")
                             else:  # b was not blocked before
                                 if punchtime - self.blastpunchtime > 1:
@@ -1153,7 +1148,8 @@ class Raft:
                                 else:
                                     if punchtime == self.blastpunchtime:
                                         continue
-                                    self.gameMessage = "B cannot punch, B has to wait at least one second to punch {0}-{1}<1".format(punchtime, self.blastpunchtime)
+                                    self.gameMessage = "B cannot punch, B has to wait at least one second to punch {0}-{1}< 1".format(
+                                        punchtime, self.blastpunchtime)
                                     print("Too early. Nothing to update")
                         if val['action'] == 4:
                             if self.bgotblocked:
@@ -1301,10 +1297,6 @@ class Raft:
                                     print("Too early. Nothing to update")
         self.gameMutex.release()
         return {"b": self.bstate, "r": self.rstate, "m": self.gameMessage}
-
-    def isReadyForGameState(self):
-        if self.blue is not None and self.red is not None:
-            return True
 
 
 class State(Enum):
